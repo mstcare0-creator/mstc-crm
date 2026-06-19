@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSTC방역 실시간 통합 운영관리 시스템</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.20/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #F8FAF6; color: #16241E; margin: 0; padding: 0; }
+        @media print {
+            body * { visibility: hidden !important; }
+            #cert-print-area, #cert-print-area * { visibility: visible !important; }
+            #cert-print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
+            @page { size: A4 portrait; margin: 0mm; }
+            body { background-color: white; }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-6">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+        
+        // 💡 주의: 1단계에서 새로 만든 URL이 있다면 아래 주소를 변경해 주세요!
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyJUCIKiumzq3QbFjZzSQq6mKWdw03AXCja8oH2mClGwUN6cv8CKJehdJLlkNHACqEY/exec"; 
+
+        const CERT_ISSUER = { name: "주)모바일솔루션즈", address: "부산 강서구 명지국제2로28번길 24, 620호", reps: "구승재, 구태원" };
+        const TODAY = new Date().toISOString().split('T')[0];
+        const CYCLES = ["주1회", "2주1회", "월1회", "2개월1회", "분기1회", "반기1회", "연1회"];
+        const STAFF = ["이원식", "강현준"];
+        
+        const CHEMICALS_BY_TYPE = { "살균": ["마이크로켐 골드", "키니아 비실드"], "살충": ["롱다운플러스", "맥스포스 셀렉트 이지갤", "다발이끔 살서제"] };
+        const ALL_CHEMICALS = [...CHEMICALS_BY_TYPE["살균"], ...CHEMICALS_BY_TYPE["살충"]];
+        
+        const REGIONS = { 
+            "부산": ["강서구", "금정구", "기장군", "남구", "동구", "동래구", "부산진구", "북구", "사상구", "사하구", "서구", "수영구", "연제구", "영도구", "중구"],
+            "창원": ["의창구", "성산구", "마산합포구", "마산회원구", "진해구"],
+            "경남": ["양산시", "김해시", "밀양시", "거제시", "진주시"]
+        };
+
+        function App() {
+            const [data, setData] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            // 💡 화면 켤 때 구글 시트에서 데이터 가져오기 (새로고침 리셋 완벽 방어)
+            useEffect(() => {
+                fetch(GOOGLE_SCRIPT_URL)
+                    .then(res => res.json())
+                    .then(fetchedData => {
+                        if (Array.isArray(fetchedData) && fetchedData.length > 0) {
+                            setData(fetchedData);
+                        }
+                        setLoading(false);
+                    })
+                    .catch(err => {
+                        console.error("구글 시트 로드 실패, 로컬 데이터 사용");
+                        const local = localStorage.getItem("mstc_crm_data_v6");
+                        if(local) setData(JSON.parse(local));
+                        setLoading(false);
+                    });
+            }, []);
+
+            // 💡 데이터가 수정될 때마다 화면+로컬+구글시트에 동시 전송 (동기화 엔진)
+            const updateDataAndSync = (newData) => {
+                setData(newData);
+                localStorage.setItem("mstc_crm_data_v6", JSON.stringify(newData)); // 보험용 로컬저장
+                
+                // 구글 시트로 백그라운드 전송
+                fetch(GOOGLE_SCRIPT_URL, {
+                    method: "POST",
+                    mode: "no-cors", // CORS 에러 방지
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ data: newData })
+                }).catch(err => console.log("Google Sheets 전송 지연"));
+            };
+
+            const [currentTab, setCurrentTab] = useState("active");
+            const [search, setSearch] = useState("");
+            
+            const [filterCity, setFilterCity] = useState("");
+            const [filterDistrict, setFilterDistrict] = useState("");
+            const [filterServiceType, setFilterServiceType] = useState("");
+            const [filterPayStatus, setFilterPayStatus] = useState("");
+            
+            const [selectedItem, setSelectedItem] = useState(null);
+            const [isEditing, setIsEditing] = useState(false);
+            const [editForm, setEditForm] = useState({});
+            
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [regCity, setRegCity] = useState("부산");
+
+            const [showHistoryForm, setShowHistoryForm] = useState(false);
+            const [historyForm, setHistoryForm] = useState({ date: TODAY, type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: "이원식" });
+            
+            const [isCertOpen, setIsCertOpen] = useState(false);
+            const [certEntry, setCertEntry] = useState(null);
+            const [sealImage, setSealImage] = useState(null);
+
+            // 신규 등록
+            const handleRegister = (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.target);
+                let regTab = fd.get("tab");
+                const payStat = fd.get("payStatus");
+                
+                if (payStat === "일시중지") regTab = "paused";
+                else if (payStat === "해지") regTab = "terminated";
+
+                const safeData = {
+                    id: "AC" + Date.now(), tab: regTab,
+                    name: fd.get("name"), manager: fd.get("manager"), phone: fd.get("phone"),
+                    gu: fd.get("gu"), dong: fd.get("dong"), address: fd.get("address"), area: fd.get("area"),
+                    contractStart: fd.get("contractStart"), serviceType: fd.get("serviceType"), payStatus: payStat,
+                    cycle: fd.get("cycle"), fee: fd.get("fee"),
+                    history: [{id: Date.now(), date: TODAY, type: "상담", content: "신규 등록 완료", author: fd.get("manager")}]
+                };
+                
+                updateDataAndSync([safeData, ...data]); // 동기화 함수 호출!
+                setIsModalOpen(false);
+                setCurrentTab(regTab);
+            };
+
+            // 정보 수정 저장
+            const handleSaveEdit = (e) => {
+                e.preventDefault();
+                let newTab = editForm.tab;
+                
+                if (editForm.payStatus === "일시중지") newTab = "paused";
+                else if (editForm.payStatus === "해지") newTab = "terminated";
+                else if (editForm.payStatus === "유료" || editForm.payStatus === "무료") {
+                    if (newTab !== "prospect") newTab = "active";
+                }
+
+                const updated = { ...editForm, tab: newTab };
+                updateDataAndSync(data.map(d => d.id === updated.id ? updated : d)); // 동기화 함수 호출!
+                setSelectedItem(updated);
+                setIsEditing(false);
+                setCurrentTab(newTab);
+            };
+
+            // 영업처 ➔ 방역 거래처 전환
+            const convertToActive = () => {
+                if(!confirm("이 업체를 '방역 거래처'로 전환하시겠습니까?")) return;
+                const updated = { ...selectedItem, tab: 'active', payStatus: '유료', contractStart: TODAY };
+                updateDataAndSync(data.map(d => d.id === updated.id ? updated : d));
+                setSelectedItem(updated);
+                setCurrentTab('active');
+            };
+
+            // 방역 기록 추가
+            const handleAddHistory = (e) => {
+                e.preventDefault();
+                const newLog = {
+                    id: Date.now(), date: historyForm.date, type: historyForm.type, author: historyForm.author,
+                    content: historyForm.type === "방역" ? "정기 방역 실시 완료" : historyForm.note,
+                    methods: historyForm.type === "방역" ? historyForm.methods : [],
+                    chemicals: historyForm.type === "방역" ? historyForm.chemicals : []
+                };
+                const updatedItem = { ...selectedItem, history: [newLog, ...(selectedItem.history || [])] };
+                updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item));
+                setSelectedItem(updatedItem);
+                setShowHistoryForm(false);
+            };
+
+            // 방역 기록 삭제
+            const handleDeleteHistory = (logId) => {
+                if(!confirm("해당 방역 기록을 삭제하시겠습니까?")) return;
+                const updatedItem = { ...selectedItem, history: selectedItem.history.filter(h => h.id !== logId) };
+                updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item));
+                setSelectedItem(updatedItem);
+            };
+
+            // 도장 업로드
+            const handleSealUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => { setSealImage(ev.target.result); };
+                reader.readAsDataURL(file);
+            };
+
+            // 리스트 필터링
+            const currentList = useMemo(() => {
+                return data.filter(r => {
+                    if (r.tab !== currentTab) return false;
+                    const matchSearch = r.name.includes(search) || r.manager.includes(search) || r.address.includes(search);
+                    const matchCity = !filterCity || r.gu === filterCity;
+                    const matchDistrict = !filterDistrict || r.dong === filterDistrict;
+                    const matchServiceType = !filterServiceType || r.serviceType === filterServiceType;
+                    const matchPayStatus = !filterPayStatus || r.payStatus === filterPayStatus;
+                    
+                    return matchSearch && matchCity && matchDistrict && matchServiceType && matchPayStatus;
+                });
+            }, [data, currentTab, search, filterCity, filterDistrict, filterServiceType, filterPayStatus]);
+
+            if (loading) return <div class="flex items-center justify-center min-h-screen font-bold text-emerald-800">구글 시트 데이터 연동 중... 잠시만 기다려주세요!</div>;
+
+            return (
+                <div>
+                    <div class={`max-w-7xl mx-auto space-y-6 ${isCertOpen ? 'hidden print:hidden' : 'block'}`}>
+                        {/* 상단 대시보드 지표 */}
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-white p-5 rounded-2xl border shadow-sm flex items-center gap-4">
+                                <div class="p-4 bg-emerald-50 rounded-xl text-emerald-700 text-2xl">👥</div>
+                                <div><p class="text-xs text-gray-400 font-medium">방역 거래처 수</p><p class="text-2xl font-bold text-gray-800">{data.filter(d=>d.tab==='active').length} <span class="text-xs text-gray-400 font-normal">개소</span></p></div>
+                            </div>
+                            <div class="bg-white p-5 rounded-2xl border shadow-sm flex items-center gap-4">
+                                <div class="p-4 bg-amber-50 rounded-xl text-amber-700 text-2xl">📈</div>
+                                <div><p class="text-xs text-gray-400 font-medium">영업 진행 건수</p><p class="text-2xl font-bold text-gray-800">{data.filter(d=>d.tab==='prospect').length} <span class="text-xs text-gray-400 font-normal">건</span></p></div>
+                            </div>
+                            <div class="bg-white p-5 rounded-2xl border shadow-sm flex items-center gap-4">
+                                <div class="p-4 bg-red-50 rounded-xl text-red-700 text-2xl">⏸️</div>
+                                <div><p class="text-xs text-gray-400 font-medium">일시중지 업체</p><p class="text-2xl font-bold text-gray-800">{data.filter(d=>d.tab==='paused').length} <span class="text-xs text-gray-400 font-normal">건</span></p></div>
+                            </div>
+                            <div class="bg-white p-5 rounded-2xl border shadow-sm flex items-center gap-4">
+                                <div class="p-4 bg-gray-50 rounded-xl text-gray-700 text-2xl">📉</div>
+                                <div><p class="text-xs text-gray-400 font-medium">해지 업체</p><p class="text-2xl font-bold text-gray-800">{data.filter(d=>d.tab==='terminated').length} <span class="text-xs text-gray-400 font-normal">건</span></p></div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col lg:flex-row gap-6">
+                            {/* 메인 리스트 보드 */}
+                            <div class="flex-1 bg-white p-6 rounded-3xl border shadow-sm h-fit">
+                                <div class="flex gap-2 p-1 bg-gray-50 border rounded-xl mb-4 overflow-x-auto">
+                                    <button onClick={() => { setCurrentTab("active"); setSelectedItem(null); }} class={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'active' ? 'bg-white text-emerald-800 shadow-sm border' : 'text-gray-500'}`}>방역 거래처 ({data.filter(d=>d.tab==='active').length})</button>
+                                    <button onClick={() => { setCurrentTab("prospect"); setSelectedItem(null); }} class={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'prospect' ? 'bg-white text-emerald-800 shadow-sm border' : 'text-gray-500'}`}>영업처 ({data.filter(d=>d.tab==='prospect').length})</button>
+                                    <button onClick={() => { setCurrentTab("paused"); setSelectedItem(null); }} class={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'paused' ? 'bg-white text-amber-700 shadow-sm border' : 'text-gray-500'}`}>일시중지 ({data.filter(d=>d.tab==='paused').length})</button>
+                                    <button onClick={() => { setCurrentTab("terminated"); setSelectedItem(null); }} class={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'terminated' ? 'bg-white text-red-700 shadow-sm border' : 'text-gray-500'}`}>해지 거래처 ({data.filter(d=>d.tab==='terminated').length})</button>
+                                </div>
+
+                                <div class="flex flex-wrap gap-2 mb-6 bg-gray-50/50 p-2 rounded-xl">
+                                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="상호명, 담당자, 주소 검색" class="text-xs p-2.5 rounded-xl border bg-white outline-none flex-1 min-w-[150px] font-medium" />
+                                    <select value={filterCity} onChange={e => { setFilterCity(e.target.value); setFilterDistrict(""); }} class="text-xs p-2.5 rounded-xl border bg-white outline-none">
+                                        <option value="">시/도 (전체)</option>{Object.keys(REGIONS).map(c => <option key={c}>{c}</option>)}
+                                    </select>
+                                    <select value={filterDistrict} onChange={e => setFilterDistrict(e.target.value)} disabled={!filterCity} class="text-xs p-2.5 rounded-xl border bg-white outline-none disabled:bg-gray-100 disabled:text-gray-400">
+                                        <option value="">구/군 (전체)</option>{filterCity && REGIONS[filterCity].map(d => <option key={d}>{d}</option>)}
+                                    </select>
+                                    <button onClick={() => setIsModalOpen(true)} class="bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl hover:opacity-95 shadow-sm whitespace-nowrap">+ 신규 등록</button>
+                                </div>
+
+                                <div class="flex flex-col gap-3">
+                                    {currentList.map(item => (
+                                        <div key={item.id} onClick={() => { setSelectedItem(item); setIsEditing(false); setShowHistoryForm(false); }} class={`p-4 border rounded-2xl cursor-pointer transition-all ${selectedItem?.id === item.id ? 'bg-emerald-50/50 border-emerald-600 shadow-sm' : 'bg-white hover:bg-gray-50'}`}>
+                                            <div class="flex justify-between items-center">
+                                                <div>
+                                                    <p class="font-bold text-sm text-gray-800">{item.name}</p>
+                                                    <p class="text-xs text-gray-500 mt-1">📍 {item.gu} {item.dong} · 담당: <b>{item.manager}</b></p>
+                                                </div>
+                                                <div class="flex flex-col items-end gap-1 text-[10px] font-bold">
+                                                    <span class={`px-2 py-0.5 rounded ${item.serviceType === '정기' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>{item.serviceType}</span>
+                                                    <span class={`px-2 py-0.5 rounded ${item.payStatus === '유료' ? 'bg-emerald-100 text-emerald-800' : item.payStatus === '무료' ? 'bg-gray-200 text-gray-700' : item.payStatus === '일시중지' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>{item.payStatus}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {currentList.length === 0 && <p class="text-center text-xs text-gray-400 py-8">업체가 없습니다.</p>}
+                                </div>
+                            </div>
+
+                            {/* 우측 상세창 */}
+                            {selectedItem && (
+                                <div class="w-full lg:w-[440px] bg-white h-fit shadow-2xl rounded-3xl border flex flex-col z-20 animate-slide-in overflow-hidden">
+                                    <div class="p-5 border-b flex justify-between items-center bg-gray-50">
+                                        <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                            {selectedItem.tab === 'active' ? '🟢' : selectedItem.tab === 'prospect' ? '🟡' : selectedItem.tab === 'paused' ? '🟠' : '🔴'} {selectedItem.name}
+                                        </h3>
+                                        <button onClick={() => setSelectedItem(null)} class="text-2xl font-bold text-gray-400 hover:text-black">×</button>
+                                    </div>
+
+                                    <div class="p-5 overflow-y-auto space-y-5">
+                                        {selectedItem.tab === "prospect" && (
+                                            <button onClick={convertToActive} class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-sm font-bold shadow-sm animate-pulse">🎉 계약 성공 (방역 거래처 전환)</button>
+                                        )}
+
+                                        {/* 정보 수정 폼 OR 정보 보기 */}
+                                        {isEditing ? (
+                                            <form onSubmit={handleSaveEdit} class="bg-gray-50 p-4 rounded-2xl border space-y-3">
+                                                <h4 class="font-bold text-sm border-b pb-2 mb-2">✏️ 업체 정보 수정</h4>
+                                                <div class="grid grid-cols-2 gap-3 text-xs">
+                                                    <label class="col-span-2">상호명 <input value={editForm.name || ""} onChange={e=>setEditForm({...editForm, name: e.target.value})} class="border p-2 w-full rounded outline-none" required /></label>
+                                                    <label>담당자 <select value={editForm.manager || ""} onChange={e=>setEditForm({...editForm, manager: e.target.value})} class="border p-2 w-full rounded outline-none">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
+                                                    <label>평수 <input value={editForm.area || ""} onChange={e=>setEditForm({...editForm, area: e.target.value})} class="border p-2 w-full rounded outline-none" /></label>
+                                                    <label class="col-span-2 flex gap-2">
+                                                        <div class="flex-1">시/도 <select value={editForm.gu || "부산"} onChange={e=>setEditForm({...editForm, gu: e.target.value, dong: REGIONS[e.target.value][0]})} class="border p-2 w-full rounded outline-none bg-white">{Object.keys(REGIONS).map(r=><option key={r} value={r}>{r}</option>)}</select></div>
+                                                        <div class="flex-1">구/군 <select value={editForm.dong || ""} onChange={e=>setEditForm({...editForm, dong: e.target.value})} class="border p-2 w-full rounded outline-none bg-white">{REGIONS[editForm.gu || "부산"].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
+                                                    </label>
+                                                    <label class="col-span-2">상세 주소 <input value={editForm.address || ""} onChange={e=>setEditForm({...editForm, address: e.target.value})} class="border p-2 w-full rounded outline-none" /></label>
+                                                    <label class="col-span-2 text-emerald-800 font-bold border-t pt-2 mt-2">필수 관리 (탭 자동 이동)</label>
+                                                    <label>방역시작일 <input type="date" value={editForm.contractStart || ""} onChange={e=>setEditForm({...editForm, contractStart: e.target.value})} class="border p-2 w-full rounded outline-none" /></label>
+                                                    <label>계약금액 <input value={editForm.fee || ""} onChange={e=>setEditForm({...editForm, fee: e.target.value})} class="border p-2 w-full rounded outline-none" /></label>
+                                                    <label>방역구분 <select value={editForm.serviceType || "정기"} onChange={e=>setEditForm({...editForm, serviceType: e.target.value})} class="border p-2 w-full rounded outline-none"><option>정기</option><option>분기</option></select></label>
+                                                    <label>결제상태 <select value={editForm.payStatus || "유료"} onChange={e=>setEditForm({...editForm, payStatus: e.target.value})} class="border p-2 w-full rounded outline-none bg-amber-50 font-bold text-amber-900"><option value="유료">유료</option><option value="무료">무료</option><option value="일시중지">일시중지</option><option value="해지">해지</option></select></label>
+                                                </div>
+                                                <div class="flex gap-2 justify-end pt-3">
+                                                    <button type="button" onClick={() => setIsEditing(false)} class="px-4 py-2 bg-white border rounded-xl text-xs font-bold">취소</button>
+                                                    <button type="submit" class="px-5 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold">저장 및 반영</button>
+                                                </div>
+                                            </form>
+                                        ) : (
+                                            <div class="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-xs">
+                                                <div><p class="text-gray-400">담당자</p><p class="font-bold mt-1">{selectedItem.manager}</p></div>
+                                                <div><p class="text-gray-400">연락처</p><p class="font-mono font-bold mt-1">{selectedItem.phone}</p></div>
+                                                <div class="col-span-2"><p class="text-gray-400">주소</p><p class="font-bold mt-1">{selectedItem.gu} {selectedItem.dong} {selectedItem.address}</p></div>
+                                                <div><p class="text-gray-400">방역시작일</p><p class="font-mono font-bold text-emerald-700 mt-1">{selectedItem.contractStart || "미기입"}</p></div>
+                                                <div><p class="text-gray-400">결제상태</p><p class="font-bold mt-1 text-emerald-700">{selectedItem.payStatus}</p></div>
+                                            </div>
+                                        )}
+
+                                        {!isEditing && (
+                                            <div class="flex gap-2">
+                                                <button onClick={() => setShowHistoryForm(!showHistoryForm)} class="flex-1 bg-emerald-50 text-emerald-800 font-bold text-xs py-2.5 rounded-xl border border-emerald-200">+ 방역기록 추가</button>
+                                                <button onClick={() => { setEditForm(selectedItem); setIsEditing(true); setShowHistoryForm(false); }} class="flex-1 bg-gray-100 text-gray-700 text-xs py-2.5 rounded-xl border font-bold">✏️ 정보 수정</button>
+                                            </div>
+                                        )}
+
+                                        {/* 방역기록 폼 */}
+                                        {showHistoryForm && !isEditing && (
+                                            <form onSubmit={handleAddHistory} class="border p-4 rounded-2xl bg-white shadow-sm space-y-4 text-xs">
+                                                <p class="font-bold text-gray-700 border-b pb-2">📝 현장 방역 기록 추가</p>
+                                                <div class="grid grid-cols-2 gap-3">
+                                                    <label class="block"><b>방역 일자</b><input type="date" value={historyForm.date} onChange={e => setHistoryForm({...historyForm, date: e.target.value})} class="w-full mt-1 p-2 border rounded-lg outline-none" /></label>
+                                                    <label class="block"><b>출동대원</b><select value={historyForm.author} onChange={e => setHistoryForm({...historyForm, author: e.target.value})} class="w-full mt-1 p-2 border rounded-lg outline-none">{STAFF.map(s => <option key={s}>{s}</option>)}</select></label>
+                                                </div>
+                                                
+                                                <div>
+                                                    <p class="font-semibold mb-1 text-gray-600">처리 종류 (복수 선택)</p>
+                                                    <div class="flex gap-2">
+                                                        {["살균", "살충"].map(m => {
+                                                            const isSel = historyForm.methods.includes(m);
+                                                            return <button type="button" key={m} onClick={() => {
+                                                                const nMeth = isSel ? historyForm.methods.filter(x => x !== m) : [...historyForm.methods, m];
+                                                                let nChem = historyForm.chemicals;
+                                                                if (isSel) nChem = nChem.filter(c => !CHEMICALS_BY_TYPE[m].includes(c));
+                                                                setHistoryForm({...historyForm, methods: nMeth, chemicals: nChem});
+                                                            }} class={`flex-1 py-2 rounded-lg border text-xs font-bold ${isSel ? 'bg-emerald-700 text-white' : 'bg-gray-50 text-gray-500'}`}>{m}</button>
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                {historyForm.methods.includes("살균") && (
+                                                    <div class="p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+                                                        <p class="font-bold text-emerald-800 mb-2">🦠 살균 약품 선택</p>
+                                                        <div class="flex flex-wrap gap-1.5">
+                                                            {CHEMICALS_BY_TYPE["살균"].map(c => {
+                                                                const hasChem = historyForm.chemicals.includes(c);
+                                                                return <button type="button" key={c} onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} class={`px-2.5 py-1.5 rounded-lg border text-[11px] font-medium ${hasChem ? 'bg-emerald-600 text-white' : 'bg-white'}`}>{c}</button>;
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {historyForm.methods.includes("살충") && (
+                                                    <div class="p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                                                        <p class="font-bold text-amber-800 mb-2">🪳 살충 약품 선택</p>
+                                                        <div class="flex flex-wrap gap-1.5">
+                                                            {CHEMICALS_BY_TYPE["살충"].map(c => {
+                                                                const hasChem = historyForm.chemicals.includes(c);
+                                                                return <button type="button" key={c} onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} class={`px-2.5 py-1.5 rounded-lg border text-[11px] font-medium ${hasChem ? 'bg-amber-600 text-white' : 'bg-white'}`}>{c}</button>;
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
+                                                <div class="flex gap-2 justify-end pt-2">
+                                                    <button type="button" onClick={() => setShowHistoryForm(false)} class="px-4 py-2 border rounded-xl bg-white font-bold">취소</button>
+                                                    <button type="submit" class="px-5 py-2 bg-emerald-700 text-white rounded-xl font-bold">기록 추가</button>
+                                                </div>
+                                            </form>
+                                        )}
+
+                                        {/* 과거 히스토리 목록 */}
+                                        <div class="space-y-3 pt-2">
+                                            <h4 class="text-xs font-bold text-gray-400">📋 과거 방역 히스토리</h4>
+                                            {(selectedItem.history || []).map((h) => (
+                                                <div key={h.id} class="p-4 bg-gray-50 border rounded-2xl text-xs space-y-1 relative group">
+                                                    <button onClick={() => handleDeleteHistory(h.id)} class="absolute top-3 right-3 text-red-500 font-bold bg-white px-2 py-1 rounded shadow-sm">🗑️ 삭제</button>
+                                                    <div class="flex justify-between items-center mb-1">
+                                                        <span class="font-bold text-emerald-800 text-sm">✅ {h.type} 완료</span>
+                                                        <span class="font-mono text-gray-400 text-[11px] mr-12">{h.date}</span>
+                                                    </div>
+                                                    {h.chemicals && h.chemicals.length > 0 && <p class="text-[11px] text-gray-600 font-medium">💊 약품: {h.chemicals.join(", ")}</p>}
+                                                    <p class="text-[10px] text-gray-400 pt-1">출동대원: {h.author}</p>
+                                                    {h.type === "방역" && (
+                                                        <button onClick={() => { setCertEntry(h); setIsCertOpen(true); }} class="mt-3 w-full bg-white border border-emerald-200 text-emerald-800 text-xs py-2 rounded-xl font-bold shadow-sm hover:bg-emerald-50 transition-all">📄 이 날짜로 소독증명서 발급</button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* 신규 등록 모달 */}
+                    {isModalOpen && (
+                        <div class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                            <form onSubmit={handleRegister} class="bg-white rounded-3xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+                                <h3 class="text-lg font-bold mb-4 border-b pb-2">신규 업체 등록</h3>
+                                <div class="grid grid-cols-2 gap-3 text-xs">
+                                    <label class="col-span-2"><b>등록 탭 구분 *</b><select name="tab" class="w-full p-2 border rounded-lg mt-1 bg-gray-50"><option value="active">방역 거래처</option><option value="prospect">영업처</option></select></label>
+                                    <label class="col-span-2"><b>상호명 *</b><input name="name" required class="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>담당 대원 *</b><select name="manager" class="w-full p-2 border rounded-lg mt-1">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
+                                    <label><b>연락처 *</b><input name="phone" required class="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label class="col-span-2 flex gap-2">
+                                        <div class="flex-1"><b>시/도 *</b><select name="gu" value={regCity} onChange={e=>setRegCity(e.target.value)} class="border p-2 w-full rounded-lg mt-1 bg-white">{Object.keys(REGIONS).map(r=><option key={r} value={r}>{r}</option>)}</select></div>
+                                        <div class="flex-1"><b>구/군 *</b><select name="dong" class="border p-2 w-full rounded-lg mt-1 bg-white">{REGIONS[regCity].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
+                                    </label>
+                                    <label class="col-span-2"><b>상세주소 *</b><input name="address" required class="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label class="col-span-2 text-emerald-800 font-bold border-t pt-2 mt-2">필수 관리 항목</label>
+                                    <label><b>방역시작일 *</b><input type="date" name="contractStart" defaultValue={TODAY} required class="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>평수 *</b><input name="area" defaultValue="30" class="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>계약 금액 *</b><input name="fee" defaultValue="30000" class="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>결제 상태 *</b><select name="payStatus" class="w-full p-2 border rounded-lg mt-1"><option>유료</option><option>무료</option><option>일시중지</option><option>해지</option></select></label>
+                                </div>
+                                <div class="flex gap-2 justify-end mt-6">
+                                    <button type="button" onClick={() => setIsModalOpen(false)} class="px-5 py-2 border rounded-xl bg-gray-100 font-bold text-xs">취소</button>
+                                    <button type="submit" class="px-6 py-2 bg-emerald-700 text-white rounded-xl font-bold text-xs">등록 완료</button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    {/* 소독증명서 팝업 (인쇄 시 배경 제거) */}
+                    {isCertOpen && selectedItem && (
+                        <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:bg-white print:p-0">
+                            <div class="bg-white rounded-3xl p-8 max-w-3xl w-full max-h-[96vh] overflow-y-auto my-auto shadow-2xl print:shadow-none print:w-full print:h-auto print:max-h-none print:overflow-visible">
+                                <div class="bg-gray-50 border p-4 rounded-2xl mb-6 text-xs flex justify-between items-center print:hidden">
+                                    <div><p class="font-bold text-emerald-800 mb-1">🖨️ 법인 인감 도장 첨부</p><input type="file" accept="image/*" onChange={handleSealUpload} class="text-[11px]" /></div>
+                                    <button onClick={() => setSealImage(null)} class="text-gray-400 underline hover:text-red-500">도장 지우기</button>
+                                </div>
+
+                                <div id="cert-print-area" class="border border-black p-12 bg-white text-black text-[13px] leading-relaxed relative mx-auto print:p-0" style={{ width: "210mm", minHeight: "297mm", boxSizing: "border-box" }}>
+                                    <p class="text-[10px] text-gray-500 font-medium mb-2">■ 감염병의 예방 및 관리에 관한 법률 시행규칙 [별지 제28호서식]</p>
+                                    <h2 class="text-center text-3xl font-black tracking-[0.6em] my-14 pt-6">소 독 증 명 서</h2>
+                                    <table class="w-full border-collapse border border-black text-left my-10">
+                                        <tbody>
+                                            <tr>
+                                                <td class="border border-black p-5 bg-gray-50 font-bold text-center w-28 text-[14px]" rowSpan="2">대상 시설</td>
+                                                <td class="border border-black p-5 bg-gray-50 font-bold w-28 text-[14px]">상호(명칭)</td>
+                                                <td class="border border-black p-5 font-bold text-[15px]">{selectedItem.name}</td>
+                                                <td class="border border-black p-5 bg-gray-50 font-bold w-36 text-[14px]">실시 면적(용적)</td>
+                                                <td class="border border-black p-5 font-mono text-[14px]">({selectedItem.area || "30"}평 ㎡²)</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="border border-black p-5 bg-gray-50 font-bold text-[14px]">소재지</td>
+                                                <td class="border border-black p-5 text-[14px]" colSpan="3">{selectedItem.gu} {selectedItem.dong} {selectedItem.address}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" colSpan="2">관리(운영)자 확인</td>
+                                                <td class="border border-black p-5 text-[14px]" colSpan="3">직위 : 매니저 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 성명 : {certEntry?.author || "이원식"}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" colSpan="2">소독기간</td>
+                                                <td class="border border-black p-5 text-center font-mono text-[14px]" colSpan="3">{certEntry?.date || TODAY} ~ {certEntry?.date || TODAY}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" rowSpan="2">소독 내용</td>
+                                                <td class="border border-black p-5 bg-gray-50 font-bold text-[14px]">종류</td>
+                                                <td class="border border-black p-5 text-[14px]" colSpan="3">{(certEntry?.methods && certEntry.methods.length > 0) ? certEntry.methods.map(m=>m+" 잔류 분무").join(", ") : "살충 잔류 분무"}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="border border-black p-5 bg-gray-50 font-bold text-[14px]">약품 사용 내용</td>
+                                                <td class="border border-black p-5 font-medium text-[14px]" colSpan="3">{(certEntry?.chemicals && certEntry.chemicals.length > 0) ? certEntry.chemicals.join(", ") : "롱다운플러스"}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <p class="my-20 text-[14px] text-justify leading-loose text-gray-900 px-3">&nbsp;&nbsp;&nbsp;「감염병의 예방 및 관리에 관한 법률」 제54조제1항 및 같은 법 시행규칙 제40조제2항에 따라 위와 같이 소독을 실시하였음을 증명합니다.</p>
+                                    <h3 class="text-center font-bold text-[15px] my-16 tracking-widest">2026 년 &nbsp;&nbsp;&nbsp;&nbsp; {certEntry?.date ? certEntry.date.split('-')[1] : '5'} 월 &nbsp;&nbsp;&nbsp;&nbsp; {certEntry?.date ? certEntry.date.split('-')[2] : '27'} 일</h3>
+                                    <div class="mt-28 pt-10 border-t border-black text-[13px] space-y-3 relative">
+                                        <p class="flex justify-between"><span><b>소독 실시자 상호(명칭)</b></span> <span class="font-bold text-right text-[14px]">{CERT_ISSUER.name}</span></p>
+                                        <p class="flex justify-between"><span><b>소재지</b></span> <span class="text-right text-gray-700 text-[13px]">{CERT_ISSUER.address}</span></p>
+                                        <p class="flex justify-between relative">
+                                            <span><b>성명(대표자)</b></span> <span class="font-bold text-right mr-20 text-[14px]">{CERT_ISSUER.reps}</span>
+                                            <span class="absolute right-4 top-[-14px]">
+                                                {sealImage ? <img src={sealImage} alt="직인" class="w-16 h-16 object-contain rounded-full" /> : <span class="text-red-600 font-bold border-2 border-red-600 rounded-full w-12 h-12 flex items-center justify-center text-[10px] transform rotate-[-6deg] bg-white/40">법인인장</span>}
+                                            </span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="flex justify-end gap-3 mt-6 border-t pt-4 print:hidden">
+                                    <button onClick={() => setIsCertOpen(false)} class="px-5 py-3 border rounded-xl text-xs bg-gray-100 font-bold">창 닫기</button>
+                                    <button onClick={() => window.print()} class="px-8 py-3 bg-[#0B5E4D] text-white rounded-xl text-xs font-bold shadow-md hover:opacity-90">🖨️ 정식 서식 인쇄 / PDF 저장</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
