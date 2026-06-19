@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MSTC방역 실시간 통합 운영관리 시스템</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.20/babel.min.js" crossorigin></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.20/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Noto Sans KR', sans-serif; background-color: #F1F4EF; color: #16241E; margin: 0; padding: 0; }
-        .font-mono { font-family: 'Roboto Mono', monospace; }
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #F8FAF6; color: #16241E; margin: 0; padding: 0; }
         @media print {
             body * { visibility: hidden !important; }
             #cert-print-area, #cert-print-area * { visibility: visible !important; }
@@ -20,410 +19,435 @@
         }
     </style>
 </head>
-<body>
+<body class="p-4 md:p-6">
     <div id="root"></div>
 
     <script type="text/babel">
+        const { useState, useMemo } = React;
         const CERT_ISSUER = { name: "주)모바일솔루션즈", address: "부산 강서구 명지국제2로28번길 24, 620호", reps: "구승재, 구태원" };
-        const TODAY = "2026-06-19";
+        const TODAY = new Date().toISOString().split('T')[0];
         const CYCLES = ["주1회", "2주1회", "월1회", "2개월1회", "분기1회", "반기1회", "연1회"];
         const STAFF = ["이원식", "강현준"];
-        const CERT_CHEMICALS_LIST = ["롱다운플러스", "맥스포스 셀렉트 이지갤", "마이크로켐 골드", "키ニア 비실드", "다발이끔 살서제"];
         
-        const GU_DONG = {
-            "부산": ["남구", "부산진구", "사상구", "동래구", "금정구", "강서구", "사하구", "수영구", "연제구", "중구", "동구", "해운대구", "북구", "서구", "영도구"],
-            "경남": ["창원시", "양산시", "김해시", "창원", "김해"]
+        // 약품 분리 데이터
+        const CHEMICALS_BY_TYPE = {
+            "살균": ["마이크로켐 골드", "키니아 비실드"],
+            "살충": ["롱다운플러스", "맥스포스 셀렉트 이지갤", "다발이끔 살서제"]
         };
-
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_9eN2W4n2Bf0Jm88r7t1k9P3vP9Lz8L-r3D/exec"; 
+        const ALL_CHEMICALS = [...CHEMICALS_BY_TYPE["살균"], ...CHEMICALS_BY_TYPE["살충"]];
+        const GU_DONG = { "부산": ["남구", "부산진구", "동래구", "강서구", "사하구", "수영구", "해운대구", "북구", "서구"], "경남": ["창원시", "양산시", "김해시"] };
 
         function App() {
-            const [systemMode, setSystemMode] = React.useState("admin"); 
-            const [active, setActive] = React.useState([]);
-            const [prospects, setProspects] = React.useState([]);
-            const [terminated, setTerminated] = React.useState([]);
-            const [loading, setLoading] = React.useState(true);
-            const [activeTab, setActiveTab] = React.useState("active");
+            // ✅ 데이터 구조: 4가지 탭(tab)과 결제상태(payStatus) 등을 포함
+            const [data, setData] = useState([
+                {id: "AC001", tab: "active", name: "춘향이보쌈왕족발(민 푸드)", manager: "강현준", gu: "부산", dong: "동래구", phone: "010.4812.9805", address: "부산 동래구 명륜로 112", area: "15", contractStart: "2024-10-02", serviceType: "정기", payStatus: "유료", cycle: "월1회", fee: "30000", history: [{id: 1, date: "2026-06-19", type: "방역", content: "정기 방역 완료", author: "강현준", methods: ["살균"], chemicals: ["마이크로켐 골드"]}]},
+                {id: "AC002", tab: "prospect", name: "가야밀면 (영업대기)", manager: "강현준", gu: "부산", dong: "부산진구", phone: "010.1234.5678", address: "부산 부산진구 가야대로", area: "20", contractStart: "", serviceType: "정기", payStatus: "무료", cycle: "월1회", fee: "0", history: []},
+                {id: "AC003", tab: "paused", name: "30년 불멸의 닭발", manager: "이원식", gu: "부산", dong: "동래구", phone: "010.2674.3095", address: "부산 동래구 충렬대로 182", area: "8", contractStart: "2025-06-20", serviceType: "정기", payStatus: "일시중지", cycle: "월1회", fee: "30000", history: []},
+                {id: "AC004", tab: "terminated", name: "옛날삼겹살 (폐업)", manager: "이원식", gu: "부산", dong: "사하구", phone: "010.0000.0000", address: "부산 사하구 하단동", area: "25", contractStart: "2024-01-01", serviceType: "정기", payStatus: "해지", cycle: "월1회", fee: "35000", history: []}
+            ]);
+
+            const [currentTab, setCurrentTab] = useState("active");
+            const [search, setSearch] = useState("");
+            const [filterGu, setFilterGu] = useState("");
             
-            const [search, setSearch] = React.useState("");
-            const [filterGu, setFilterGu] = React.useState("");
-            const [filterCycle, setFilterCycle] = React.useState("");
-            const [filterManager, setFilterManager] = React.useState(""); 
-
-            const [isModalOpen, setIsModalOpen] = React.useState(false);
-            const [isCertOpen, setIsCertOpen] = React.useState(false);
-            const [certRecord, setCertRecord] = React.useState(null);
-            const [certEntry, setCertEntry] = React.useState(null);
+            const [selectedItem, setSelectedItem] = useState(null);
+            const [isEditing, setIsEditing] = useState(false);
+            const [editForm, setEditForm] = useState({});
             
-            const [selectedItem, setSelectedItem] = React.useState(null);
-            const [showHistoryForm, setShowHistoryForm] = React.useState(false);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [showHistoryForm, setShowHistoryForm] = useState(false);
+            const [historyForm, setHistoryForm] = useState({ date: TODAY, type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: "이원식" });
             
-            const [historyForm, setHistoryForm] = React.useState({ date: TODAY, type: "방역", methods: ["살충 잔류 분무", "독 먹이법"], chemicals: ["롱다운플러스", "맥스포스 셀렉트 이지갤"], note: "", author: "이원식" });
-            const [sealImage, setSealImage] = React.useState(null);
+            const [isCertOpen, setIsCertOpen] = useState(false);
+            const [certEntry, setCertEntry] = useState(null);
+            const [sealImage, setSealImage] = useState(null);
 
-            const [bizInput, setBizInput] = React.useState("");
-            const [searchResult, setSearchResult] = React.useState(null);
-            const [searchError, setSearchError] = React.useState("");
-
-            React.useEffect(() => {
-                fetch(GOOGLE_SCRIPT_URL)
-                    .then(res => res.json())
-                    .then(data => {
-                        setActive(data.active || []);
-                        setProspects(data.prospects || []);
-                        setTerminated(data.terminated || []);
-                        setLoading(false);
-                    })
-                    .catch(() => {
-                        setActive([
-                            {id: "AC001", name: "춘향이보쌈왕족발(민 푸드)", gu: "부산", dong: "동래구", manager: "강현준", cycle: "월1회", address: "부산 동래구 명륜로 112", businessNumber: "123-45-67890", area: "15", contractStart: "2024-10-02", status: "정상", phone: "010.4812.9805", fee: "30000", history: [{id: "H1", date: "2024-10-02", type: "상담", content: "신규 계약 체결", author: "강현준"}]},
-                            {id: "AC002", name: "고구려 짬뽕 가야밀면", gu: "부산", dong: "부산진구", manager: "강현준", cycle: "월1회", address: "부산 부산진구 가야대로 502", businessNumber: "987-65-43210", area: "15", contractStart: "2024-10-17", status: "정상", phone: "010.2541.3180", fee: "30000", history: [{id: "H2", date: "2024-10-17", type: "상담", content: "신규 계약 체결", author: "강현준"}]},
-                            {id: "AC003", name: "담락참치일잔 진해용원점", gu: "부산", dong: "강서구", manager: "강현준", cycle: "월1회", address: "부산 강서구 용원서로 32", businessNumber: "555-55-55555", area: "15", contractStart: "2024-11-28", status: "정상", phone: "010.8121.9820", fee: "30000", history: [{id: "H3", date: "2024-11-28", type: "상담", content: "신규 계약 체결", author: "강현준"}]},
-                            {id: "AC004", name: "30년 불멸의 닭발", gu: "부산", dong: "동래구", manager: "이원식", cycle: "월1회", address: "부산 동래구 충렬대로 182", businessNumber: "214-11-89732", area: "8", contractStart: "2025-06-20", status: "정상", phone: "010.2674.3095", fee: "30000", payStatus: "일시중단", history: [{id: "H4", date: "2025-06-20", type: "상담", content: "신규 계약 체결", author: "이원식"}, {id: "H5", date: "2026-05-22", type: "방역", content: "정기 방역 실시 완료", author: "이원식", methods: ["살충 잔류 분무", "독 먹이법"], chemicals: ["롱다운플러스", "맥스포스 셀렉트 이지갤"]}]},
-                            {id: "AC005", name: "전주명품콩나물국밥", gu: "창원", dong: "진해구", manager: "강현준", cycle: "월1회", address: "창원 진해구 충장로 405", businessNumber: "105-09-88732", area: "70", contractStart: "2025-05-14", status: "정상", phone: "010.7272.0512", fee: "40000", history: [{id: "H6", date: "2026-06-09", type: "방역", content: "정기 방역 실시 완료", author: "강현준", methods: ["살충 잔류 분무"], chemicals: ["롱다운플러스"]}]},
-                            {id: "AC006", name: "영커피 창원상남점", gu: "창원", dong: "성산구", manager: "강현준", cycle: "월1회", address: "창원 성산구 마디미로 28", businessNumber: "402-11-50231", area: "17", contractStart: "2025-07-11", status: "정상", phone: "010-9921-4412", fee: "30000", history: []},
-                            {id: "AC007", name: "김밥일번지 진해장천점", gu: "창원", dong: "진해구", manager: "강현준", cycle: "월1회", address: "창원 진해구 장천동 412", businessNumber: "882-12-00234", area: "38", contractStart: "2025-08-02", status: "정상", phone: "010-2345-6671", fee: "35000", history: []},
-                            {id: "AC008", name: "명품달인김밥 용원점", gu: "창원", dong: "진해구", manager: "강현준", cycle: "월1회", address: "창원 진해구 용원동 123", businessNumber: "260-02-264", area: "13", contractStart: "2025-05-27", status: "정상", phone: "010-2492-4172", fee: "30000", history: []}
-                        ]);
-                        setLoading(false);
-                    });
-            }, []);
-
-            function handleRegister(formData, kind) {
+            // 1. 신규 등록
+            const handleRegister = (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.target);
+                const regTab = fd.get("tab");
                 const safeData = {
                     id: "AC" + Date.now(),
-                    name: formData.name || "미지정 상호명",
-                    businessNumber: formData.businessNumber || "",
-                    contactName: formData.contactName || "",
-                    phone: formData.phone || "",
-                    gu: formData.gu || "부산",
-                    dong: formData.dong || "",
-                    address: formData.address || "",
-                    area: formData.area || "30",
-                    manager: formData.manager || STAFF[0],
-                    cycle: formData.cycle || "월1회",
-                    contractStart: formData.contractStart || TODAY,
-                    status: "정상",
-                    fee: formData.fee || "30000",
-                    history: [{id: "H" + Date.now(), date: TODAY, type: "상담", content: "신규 등록 완료", author: formData.manager || STAFF[0]}]
+                    tab: regTab,
+                    name: fd.get("name"),
+                    contactName: fd.get("contactName"),
+                    phone: fd.get("phone"),
+                    gu: fd.get("gu"),
+                    address: fd.get("address"),
+                    area: fd.get("area"),
+                    manager: fd.get("manager"),
+                    cycle: fd.get("cycle"),
+                    fee: fd.get("fee"),
+                    contractStart: fd.get("contractStart"),
+                    serviceType: fd.get("serviceType"),
+                    payStatus: fd.get("payStatus"),
+                    history: [{id: Date.now(), date: TODAY, type: "상담", content: "신규 등록 완료", author: fd.get("manager")}]
                 };
-
-                if(kind === "active") { setActive(prev => [safeData, ...prev]); } 
-                else { setProspects(prev => [safeData, ...prev]); }
+                setData([safeData, ...data]);
                 setIsModalOpen(false);
-            }
+            };
 
-            function handleAddHistory(e) {
+            // 2. 정보 수정 및 탭 자동 이동
+            const saveEdit = () => {
+                let newTab = editForm.tab;
+                
+                // 결제상태에 따른 자동 탭 스위칭 로직!
+                if (editForm.payStatus === "일시중지") newTab = "paused";
+                else if (editForm.payStatus === "해지") newTab = "terminated";
+                else if (editForm.payStatus === "유료" || editForm.payStatus === "무료") {
+                    if (newTab !== "prospect") newTab = "active"; // 영업처가 아니면 방역거래처로
+                }
+
+                const updated = { ...editForm, tab: newTab };
+                setData(data.map(d => d.id === updated.id ? updated : d));
+                setSelectedItem(updated);
+                setIsEditing(false);
+            };
+
+            // 3. 영업처 ➔ 방역 거래처 성공 이동
+            const convertToActive = () => {
+                if(!confirm("이 업체를 '방역 거래처'로 전환하시겠습니까?")) return;
+                const updated = { ...selectedItem, tab: 'active', payStatus: '유료', contractStart: TODAY };
+                setData(data.map(d => d.id === updated.id ? updated : d));
+                setSelectedItem(updated);
+            };
+
+            // 4. 방역 기록 조작
+            const handleAddHistory = (e) => {
                 e.preventDefault();
-                if(!selectedItem) return;
-
                 const newLog = {
-                    id: "H" + Date.now(),
-                    date: historyForm.date,
-                    type: historyForm.type,
+                    id: Date.now(), date: historyForm.date, type: historyForm.type, author: historyForm.author,
                     content: historyForm.type === "방역" ? "정기 방역 실시 완료" : historyForm.note,
-                    author: historyForm.author,
                     methods: historyForm.type === "방역" ? historyForm.methods : [],
                     chemicals: historyForm.type === "방역" ? historyForm.chemicals : []
                 };
-
                 const updatedItem = { ...selectedItem, history: [newLog, ...(selectedItem.history || [])] };
-                setActive(prev => prev.map(item => item.id === selectedItem.id ? updatedItem : item));
+                setData(data.map(item => item.id === selectedItem.id ? updatedItem : item));
                 setSelectedItem(updatedItem);
                 setShowHistoryForm(false);
-                setHistoryForm({ date: TODAY, type: "방역", methods: ["살충 잔류 분무", "독 먹이법"], chemicals: ["롱다운플러스", "맥스포스 셀렉트 이지갤"], note: "", author: "이원식" });
-            }
+            };
 
-            function handleDeleteHistory(logId) {
-                if(!selectedItem || !confirm("해당 방역 기록을 정말로 삭제하시겠습니까?")) return;
-                const updatedItem = { ...selectedItem, history: (selectedItem.history || []).filter(h => h.id !== logId) };
-                setActive(prev => prev.map(item => item.id === selectedItem.id ? updatedItem : item));
+            const handleDeleteHistory = (logId) => {
+                if(!confirm("해당 방역 기록을 삭제하시겠습니까?")) return;
+                const updatedItem = { ...selectedItem, history: selectedItem.history.filter(h => h.id !== logId) };
+                setData(data.map(item => item.id === selectedItem.id ? updatedItem : item));
                 setSelectedItem(updatedItem);
-            }
+            };
 
-            function handleCustomerSearch(e) {
-                e.preventDefault();
-                setSearchError(""); setSearchResult(null);
-                const cleanInput = bizInput.replace(/-/g, "").trim();
-                const found = active.find(r => String(r.businessNumber || "").replace(/-/g, "").trim() === cleanInput || String(r.name || "").includes(cleanInput));
-                if(found) { setSearchResult(found); } 
-                else { setSearchError("등록된 가맹점 정보를 찾을 수 없습니다."); }
-            }
-
-            function handleSealUpload(e) {
+            // 5. 도장 업로드
+            const handleSealUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (event) => { setSealImage(event.target.result); };
+                reader.onload = (ev) => { setSealImage(ev.target.result); };
                 reader.readAsDataURL(file);
-            }
+            };
 
-            // 👥 [버그수정] 업체명, 주소 검색창에 담당자(이원식, 강현준) 이름을 쳐도 완벽하게 연동 검색되도록 엔진 수정
-            const currentList = React.useMemo(() => {
-                const base = activeTab === "active" ? active : activeTab === "prospect" ? prospects : terminated;
-                return (base || []).filter(r => {
-                    if (!r) return false;
-                    const matchSearch = (r.name || "").toLowerCase().includes(search.toLowerCase()) || 
-                                        (r.address || "").toLowerCase().includes(search.toLowerCase()) ||
-                                        (r.manager || "").toLowerCase().includes(search.toLowerCase()); // 담당자 이름 매칭 트리거 추가
+            // 필터링
+            const currentList = useMemo(() => {
+                return data.filter(r => {
+                    if (r.tab !== currentTab) return false;
+                    const matchSearch = r.name.includes(search) || r.manager.includes(search) || r.address.includes(search);
                     const matchGu = !filterGu || r.gu === filterGu;
-                    const matchCycle = !filterCycle || r.cycle === filterCycle;
-                    return matchSearch && matchGu && matchCycle;
+                    return matchSearch && matchGu;
                 });
-            }, [activeTab, active, prospects, terminated, search, filterGu, filterCycle]);
+            }, [data, currentTab, search, filterGu]);
 
             return (
-                <div class="min-h-screen flex flex-col bg-[#F8FAF6]">
-                    {systemMode === "admin" ? (
-                        /* ================= [사내 관리자 화면 모드] ================= */
-                        <div class="flex-1 flex relative overflow-hidden">
-                            <div class="flex-1 p-4 md:p-6 overflow-y-auto max-w-5xl mx-auto w-full space-y-5">
-                                
-                                {/* 📊 [대진표 매칭] 스크린샷 6697fb 구역의 최상단 4대 지표 카드 컴포넌트 완벽 복원 */}
-                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3">
-                                        <div class="p-3 bg-emerald-50 rounded-xl text-emerald-700 text-lg">👥</div>
-                                        <div><p class="text-[11px] text-gray-400 font-medium">전체 거래처 수</p><p class="text-xl font-bold text-gray-800">121 <span class="text-xs text-gray-400 font-normal">이원식 63 · 강현준 58</span></p></div>
+                <div class="max-w-6xl mx-auto space-y-6">
+                    {/* 📊 상단 4대 지표 대시보드 (디자인 원상복구) */}
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-white p-5 rounded-2xl border shadow-sm flex items-center gap-4">
+                            <div class="p-4 bg-emerald-50 rounded-xl text-emerald-700 text-2xl">👥</div>
+                            <div><p class="text-xs text-gray-400 font-medium">전체 거래처 수</p><p class="text-2xl font-bold text-gray-800">{data.filter(d=>d.tab==='active').length} <span class="text-xs text-gray-400 font-normal">운영중</span></p></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border shadow-sm flex items-center gap-4">
+                            <div class="p-4 bg-red-50 rounded-xl text-red-700 text-2xl">📅</div>
+                            <div><p class="text-xs text-gray-400 font-medium">이번 달 방역 예정</p><p class="text-2xl font-bold text-gray-800">70 <span class="text-xs text-red-500 font-bold">지연 77건</span></p></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border shadow-sm flex items-center gap-4">
+                            <div class="p-4 bg-amber-50 rounded-xl text-amber-700 text-2xl">📈</div>
+                            <div><p class="text-xs text-gray-400 font-medium">영업 진행 건수</p><p class="text-2xl font-bold text-gray-800">{data.filter(d=>d.tab==='prospect').length} <span class="text-xs text-gray-400 font-normal">건 진행중</span></p></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border shadow-sm flex items-center gap-4">
+                            <div class="p-4 bg-gray-50 rounded-xl text-gray-700 text-2xl">📉</div>
+                            <div><p class="text-xs text-gray-400 font-medium">해지율</p><p class="text-2xl font-bold text-gray-800">33.1% <span class="text-xs text-gray-400 font-normal">해지 {data.filter(d=>d.tab==='terminated').length}건</span></p></div>
+                        </div>
+                    </div>
+
+                    {/* 📈 월별 순증 추이 (디자인 원상복구) */}
+                    <div class="bg-white border p-6 rounded-2xl shadow-sm">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-sm font-bold text-gray-700">📊 월별 순증 추이</h3>
+                        </div>
+                        <div class="h-32 flex items-end justify-between pt-4 px-4 border-b border-gray-100">
+                            {[ {m:'1월', h:'h-20'}, {m:'2월', h:'h-16'}, {m:'3월', h:'h-8'}, {m:'4월', h:'h-14'}, {m:'5월', h:'h-24'}, {m:'6월', h:'h-16'} ].map(chart => (
+                                <div key={chart.m} class="w-12 flex flex-col items-center gap-2">
+                                    <div class={`w-3 ${chart.h} bg-emerald-700 rounded-t-sm`}></div>
+                                    <span class="text-xs text-gray-400">{chart.m}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* 메인 리스트 보드 */}
+                    <div class="flex flex-col lg:flex-row gap-6">
+                        <div class="flex-1 bg-white p-6 rounded-3xl border shadow-sm h-fit">
+                            
+                            {/* 🔥 [요청기능] 4대 탭 완벽 분류 */}
+                            <div class="flex gap-2 p-1 bg-gray-50 border rounded-xl mb-6 overflow-x-auto">
+                                <button onClick={() => { setCurrentTab("active"); setSelectedItem(null); }} class={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'active' ? 'bg-white text-emerald-800 shadow-sm border' : 'text-gray-500'}`}>방역 거래처 ({data.filter(d=>d.tab==='active').length})</button>
+                                <button onClick={() => { setCurrentTab("prospect"); setSelectedItem(null); }} class={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'prospect' ? 'bg-white text-emerald-800 shadow-sm border' : 'text-gray-500'}`}>영업처 ({data.filter(d=>d.tab==='prospect').length})</button>
+                                <button onClick={() => { setCurrentTab("paused"); setSelectedItem(null); }} class={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'paused' ? 'bg-white text-amber-700 shadow-sm border' : 'text-gray-500'}`}>일시중지 ({data.filter(d=>d.tab==='paused').length})</button>
+                                <button onClick={() => { setCurrentTab("terminated"); setSelectedItem(null); }} class={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'terminated' ? 'bg-white text-red-700 shadow-sm border' : 'text-gray-500'}`}>해지 거래처 ({data.filter(d=>d.tab==='terminated').length})</button>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-4">
+                                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="업체명, 담당자, 주소 검색" class="text-xs p-3 rounded-xl border bg-gray-50 outline-none sm:col-span-2 font-medium" />
+                                <select value={filterGu} onChange={e => setFilterGu(e.target.value)} class="text-xs p-3 rounded-xl border bg-white outline-none">
+                                    <option value="">전체 구</option>
+                                    {GU_DONG["부산"].map(g => <option key={g} value={g}>{g}</option>)}
+                                </select>
+                                <button onClick={() => setIsModalOpen(true)} class="bg-emerald-700 text-white font-bold text-xs py-3 rounded-xl hover:opacity-95 shadow-sm">+ 신규 등록</button>
+                            </div>
+
+                            <div class="flex flex-col gap-3">
+                                {currentList.map(item => (
+                                    <div key={item.id} onClick={() => { setSelectedItem(item); setIsEditing(false); setShowHistoryForm(false); }} class={`p-4 border rounded-2xl cursor-pointer transition-all ${selectedItem?.id === item.id ? 'bg-emerald-50/50 border-emerald-600 shadow-sm' : 'bg-white hover:bg-gray-50'}`}>
+                                        <div class="flex justify-between items-center">
+                                            <div>
+                                                <p class="font-bold text-sm text-gray-800">{item.name}</p>
+                                                <p class="text-xs text-gray-500 mt-1">📍 {item.gu} {item.dong} · 담당: <b>{item.manager}</b> · {item.cycle} · {item.area}평</p>
+                                            </div>
+                                            <div>
+                                                {item.payStatus === "일시중지" && <span class="text-[10px] bg-amber-100 text-amber-800 px-2 py-1 rounded font-bold">일시중지</span>}
+                                                {item.payStatus === "해지" && <span class="text-[10px] bg-red-100 text-red-800 px-2 py-1 rounded font-bold">해지됨</span>}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3">
-                                        <div class="p-3 bg-red-50 rounded-xl text-red-700 text-lg">📅</div>
-                                        <div><p class="text-[11px] text-gray-400 font-medium">이번 달 방역 예정</p><p class="text-xl font-bold text-gray-800">70 <span class="text-xs text-red-500 font-bold">지연 77건</span></p></div>
+                                ))}
+                                {currentList.length === 0 && <p class="text-center text-xs text-gray-400 py-8">조회된 업체가 없습니다.</p>}
+                            </div>
+                        </div>
+
+                        {/* 🔎 우측 상세 정보창 */}
+                        {selectedItem && (
+                            <div class="w-full lg:w-[440px] bg-white h-full shadow-2xl rounded-3xl border flex flex-col z-20 animate-slide-in overflow-hidden">
+                                <div class="p-5 border-b flex justify-between items-center bg-gray-50">
+                                    <div>
+                                        <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                            {selectedItem.tab === 'active' ? '🟢' : selectedItem.tab === 'prospect' ? '🟡' : '🔴'} {selectedItem.name}
+                                        </h3>
                                     </div>
-                                    <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3">
-                                        <div class="p-3 bg-amber-50 rounded-xl text-amber-700 text-lg">📈</div>
-                                        <div><p class="text-[11px] text-gray-400 font-medium">영업 진행 건수</p><p class="text-xl font-bold text-gray-800">43 <span class="text-xs text-gray-400 font-normal">전체 73건 중</span></p></div>
-                                    </div>
-                                    <div class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-3">
-                                        <div class="p-3 bg-gray-50 rounded-xl text-gray-700 text-lg">📉</div>
-                                        <div><p class="text-[11px] text-gray-400 font-medium">해지율</p><p class="text-xl font-bold text-gray-800">33.1% <span class="text-xs text-gray-400 font-normal">해지 60건</span></p></div>
-                                    </div>
+                                    <button onClick={() => setSelectedItem(null)} class="text-2xl font-bold text-gray-400 hover:text-black">×</button>
                                 </div>
 
-                                {/* 📉 [대진표 매칭] 스크린샷 6697fb 중단 구역 월별 순증 추이 바 그래프 스켈레톤 디자인 안착 */}
-                                <div class="bg-white border p-4 rounded-2xl shadow-sm">
-                                    <div class="flex justify-between items-center mb-3">
-                                        <h3 class="text-xs font-bold text-gray-700 flex items-center gap-1.5">📊 월별 순증 추이</h3>
-                                        <select class="text-[11px] p-1.5 border rounded-lg bg-gray-50 text-gray-500 outline-none"><option>전체 담당자</option></select>
-                                    </div>
-                                    <div class="h-28 flex items-end justify-between pt-4 px-2 border-b border-gray-100">
-                                        <div class="w-12 flex flex-col items-center gap-1"><div class="w-2.5 h-16 bg-emerald-700 rounded-t"></div><span class="text-[10px] text-gray-400">1월</span></div>
-                                        <div class="w-12 flex flex-col items-center gap-1"><div class="w-2.5 h-12 bg-emerald-700 rounded-t"></div><span class="text-[10px] text-gray-400">2월</span></div>
-                                        <div class="w-12 flex flex-col items-center gap-1"><div class="w-2.5 h-6 bg-emerald-700 rounded-t"></div><span class="text-[10px] text-gray-400">3월</span></div>
-                                        <div class="w-12 flex flex-col items-center gap-1"><div class="w-2.5 h-10 bg-emerald-800 rounded-t"></div><span class="text-[10px] text-gray-400">4월</span></div>
-                                        <div class="w-12 flex flex-col items-center gap-1"><div class="w-2.5 h-14 bg-red-700 rounded-t"></div><span class="text-[10px] text-gray-400">5월</span></div>
-                                        <div class="w-12 flex flex-col items-center gap-1"><div class="w-2.5 h-12 bg-emerald-700 rounded-t"></div><span class="text-[10px] text-gray-400">6월</span></div>
-                                    </div>
-                                </div>
+                                <div class="p-5 overflow-y-auto space-y-5">
+                                    
+                                    {/* 🔥 [요청기능] 영업처 성공 시 방역 거래처로 자동 스위칭 버튼 */}
+                                    {selectedItem.tab === "prospect" && (
+                                        <button onClick={convertToActive} class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-sm font-bold shadow-sm animate-pulse">
+                                            🎉 계약 성공 (방역 거래처로 즉시 전환)
+                                        </button>
+                                    )}
 
-                                {/* 메인 리스트 컨트롤 박스 */}
-                                <div class="bg-white border rounded-3xl p-4 shadow-sm">
-                                    <div class="flex gap-1.5 p-1 bg-gray-50 border rounded-xl mb-4">
-                                        <button onClick={() => { setActiveTab("active"); setSelectedItem(null); }} class={`flex-1 py-2 text-xs font-semibold rounded-lg text-center transition-all ${activeTab === 'active' ? 'bg-white text-[#0B5E4D] shadow-sm' : 'text-gray-500'}`}>방역 거래처 ({active.length})</button>
-                                        <button onClick={() => { setActiveTab("prospect"); setSelectedItem(null); }} class={`flex-1 py-2 text-xs font-semibold rounded-lg text-center transition-all ${activeTab === 'prospect' ? 'bg-white text-[#0B5E4D] shadow-sm' : 'text-gray-500'}`}>영업처 ({prospects.length})</button>
-                                    </div>
+                                    {/* 정보 수정 폼 OR 상세 보기 */}
+                                    {isEditing ? (
+                                        <div class="bg-gray-50 p-4 rounded-2xl border space-y-3">
+                                            <h4 class="font-bold text-sm border-b pb-2 mb-2">✏️ 업체 정보 수정</h4>
+                                            <div class="grid grid-cols-2 gap-3 text-xs">
+                                                <label class="col-span-2">상호명 <input value={editForm.name} onChange={e=>setEditForm({...editForm, name: e.target.value})} class="border p-2 w-full rounded mt-1 outline-none" /></label>
+                                                <label>담당자 <select value={editForm.manager} onChange={e=>setEditForm({...editForm, manager: e.target.value})} class="border p-2 w-full rounded mt-1 outline-none">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
+                                                <label>평수 <input value={editForm.area} onChange={e=>setEditForm({...editForm, area: e.target.value})} class="border p-2 w-full rounded mt-1 outline-none" /></label>
+                                                <label class="col-span-2">주소 <input value={editForm.address} onChange={e=>setEditForm({...editForm, address: e.target.value})} class="border p-2 w-full rounded mt-1 outline-none" /></label>
+                                                
+                                                {/* 🔥 [요청기능] 필수 기입 사항 추가 (방역시작일, 방역구분, 결제상태) */}
+                                                <label class="col-span-2 text-emerald-800 font-bold border-t pt-2 mt-2">필수 관리 항목</label>
+                                                <label>방역시작일 <input type="date" value={editForm.contractStart} onChange={e=>setEditForm({...editForm, contractStart: e.target.value})} class="border p-2 w-full rounded mt-1 outline-none" /></label>
+                                                <label>계약금액 <input value={editForm.fee} onChange={e=>setEditForm({...editForm, fee: e.target.value})} class="border p-2 w-full rounded mt-1 outline-none" /></label>
+                                                <label>방역구분 <select value={editForm.serviceType} onChange={e=>setEditForm({...editForm, serviceType: e.target.value})} class="border p-2 w-full rounded mt-1 outline-none"><option>정기</option><option>분기</option></select></label>
+                                                <label>결제상태 <select value={editForm.payStatus} onChange={e=>setEditForm({...editForm, payStatus: e.target.value})} class="border p-2 w-full rounded mt-1 outline-none bg-amber-50 font-bold text-amber-900"><option value="유료">유료</option><option value="무료">무료</option><option value="일시중지">일시중지</option><option value="해지">해지</option></select></label>
+                                            </div>
+                                            <div class="flex gap-2 justify-end pt-3">
+                                                <button onClick={() => setIsEditing(false)} class="px-4 py-2 bg-white border rounded-xl text-xs font-bold">취소</button>
+                                                <button onClick={saveEdit} class="px-5 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold">저장 및 반영</button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div class="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-xs">
+                                            <div><p class="text-gray-400">담당자</p><p class="font-bold text-gray-800 mt-1">{selectedItem.manager}</p></div>
+                                            <div><p class="text-gray-400">연락처</p><p class="font-mono font-bold text-gray-800 mt-1">{selectedItem.phone}</p></div>
+                                            <div class="col-span-2"><p class="text-gray-400">주소</p><p class="font-bold text-gray-800 mt-1">{selectedItem.address}</p></div>
+                                            <div><p class="text-gray-400">방역시작일</p><p class="font-mono font-bold text-emerald-700 mt-1">{selectedItem.contractStart || "미기입"}</p></div>
+                                            <div><p class="text-gray-400">방역구분</p><p class="font-bold text-gray-800 mt-1"><span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded">{selectedItem.serviceType}</span></p></div>
+                                            <div><p class="text-gray-400">계약금액</p><p class="font-mono font-bold text-gray-800 mt-1">₩{Number(selectedItem.fee).toLocaleString()}</p></div>
+                                            <div><p class="text-gray-400">결제상태</p><p class="font-bold mt-1"><span class={`px-2 py-0.5 rounded ${selectedItem.payStatus==='일시중지'?'bg-amber-100 text-amber-800': selectedItem.payStatus==='해지'?'bg-red-100 text-red-800':'bg-emerald-100 text-emerald-800'}`}>{selectedItem.payStatus}</span></p></div>
+                                        </div>
+                                    )}
 
-                                    <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 mb-4">
-                                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="업체명, 담당자, 주소 검색" class="text-xs p-2 rounded-xl border bg-gray-50 outline-none sm:col-span-2 font-medium text-gray-700" />
-                                        <select value={filterGu} onChange={e => setFilterGu(e.target.value)} class="text-xs p-2 rounded-xl border bg-white text-gray-600 outline-none">
-                                            <option value="">전체 구</option>
-                                            {GU_DONG["부산"].map(g => <option key={g} value={g}>{g}</option>)}
-                                        </select>
-                                        <select value={filterCycle} onChange={e => setFilterCycle(e.target.value)} class="text-xs p-2 rounded-xl border bg-white text-gray-600 outline-none">
-                                            <option value="">전체 주기</option>
-                                            {CYCLES.map(c => <option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                        <button onClick={() => setIsModalOpen(true)} class="bg-[#0E7A63] text-white font-bold text-xs py-2 rounded-xl hover:opacity-95 transition-all">+ 신규 등록</button>
-                                    </div>
+                                    {!isEditing && (
+                                        <div class="flex gap-2">
+                                            <button onClick={() => setShowHistoryForm(!showHistoryForm)} class="flex-1 bg-emerald-50 text-emerald-800 font-bold text-xs py-2.5 rounded-xl border border-emerald-200">+ 방역기록 추가</button>
+                                            <button onClick={() => { setEditForm(selectedItem); setIsEditing(true); setShowHistoryForm(false); }} class="flex-1 bg-gray-100 text-gray-700 text-xs py-2.5 rounded-xl border font-bold">✏️ 정보 수정</button>
+                                        </div>
+                                    )}
 
-                                    <div class="flex flex-col gap-2">
-                                        {currentList.map(item => (
-                                            <div key={item.id} onClick={() => { setSelectedItem(item); setShowHistoryForm(false); }} class={`flex justify-between items-center p-3.5 border rounded-xl cursor-pointer transition-all ${selectedItem?.id === item.id ? 'bg-emerald-50/50 border-[#0E7A63] shadow-sm' : 'bg-gray-50/50 hover:bg-white'}`}>
-                                                <div class="min-w-0 flex-1">
-                                                    <span class="text-sm font-bold text-gray-800">{item.name}</span>
-                                                    <p class="text-xs text-gray-400 mt-1">📍 {item.gu} {item.dong || ""} · 담당: <b>{item.manager}</b> · {item.cycle || "월1회"} · {item.area || "30"}평</p>
+                                    {/* 📝 [방역기록 추가 폼 - 살균/살충 탭 분리 유지] */}
+                                    {showHistoryForm && !isEditing && (
+                                        <form onSubmit={handleAddHistory} class="border p-4 rounded-2xl bg-white shadow-sm space-y-4 text-xs animate-fade-in">
+                                            <p class="font-bold text-gray-700 border-b pb-2">📝 현장 방역 기록 추가</p>
+                                            <div class="grid grid-cols-2 gap-3">
+                                                <label class="block"><b>방역 일자</b><input type="date" value={historyForm.date} onChange={e => setHistoryForm({...historyForm, date: e.target.value})} class="w-full mt-1 p-2 bg-gray-50 border rounded-lg outline-none" /></label>
+                                                <label class="block"><b>출동대원</b>
+                                                    <select value={historyForm.author} onChange={e => setHistoryForm({...historyForm, author: e.target.value})} class="w-full mt-1 p-2 bg-gray-50 border rounded-lg outline-none">
+                                                        {STAFF.map(s => <option key={s}>{s}</option>)}
+                                                    </select>
+                                                </label>
+                                            </div>
+                                            
+                                            <div>
+                                                <p class="font-semibold mb-1 text-gray-600">처리 종류 (복수 선택)</p>
+                                                <div class="flex gap-2">
+                                                    {["살균", "살충"].map(m => {
+                                                        const isSelected = historyForm.methods.includes(m);
+                                                        return (
+                                                            <button type="button" key={m} 
+                                                                onClick={() => {
+                                                                    const nextMethods = isSelected ? historyForm.methods.filter(x => x !== m) : [...historyForm.methods, m];
+                                                                    let nextChems = historyForm.chemicals;
+                                                                    if (isSelected) nextChems = nextChems.filter(c => !CHEMICALS_BY_TYPE[m].includes(c));
+                                                                    setHistoryForm({...historyForm, methods: nextMethods, chemicals: nextChems});
+                                                                }} 
+                                                                class={`flex-1 py-2 rounded-lg border text-xs font-bold transition-all ${isSelected ? 'bg-emerald-700 text-white border-emerald-800' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
+                                                                {m}
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
-                                                <div class="flex items-center gap-2">
-                                                    {item.payStatus === "일시중단" && <span class="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold">일시중단</span>}
-                                                    <span class="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-mono font-bold">503일 지연</span>
+                                            </div>
+
+                                            {historyForm.methods.includes("살균") && (
+                                                <div class="p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl">
+                                                    <p class="font-bold text-emerald-800 mb-2">🦠 살균 약품 선택</p>
+                                                    <div class="flex flex-wrap gap-1.5">
+                                                        {CHEMICALS_BY_TYPE["살균"].map(c => {
+                                                            const hasChem = historyForm.chemicals.includes(c);
+                                                            return (
+                                                                <button type="button" key={c} onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})}
+                                                                    class={`px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-all ${hasChem ? 'bg-emerald-600 text-white border-emerald-700 font-bold' : 'bg-white text-gray-500'}`}>
+                                                                    {c}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
+                                            )}
+
+                                            {historyForm.methods.includes("살충") && (
+                                                <div class="p-3 bg-amber-50/50 border border-amber-100 rounded-xl">
+                                                    <p class="font-bold text-amber-800 mb-2">🪳 살충 약품 선택</p>
+                                                    <div class="flex flex-wrap gap-1.5">
+                                                        {CHEMICALS_BY_TYPE["살충"].map(c => {
+                                                            const hasChem = historyForm.chemicals.includes(c);
+                                                            return (
+                                                                <button type="button" key={c} onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})}
+                                                                    class={`px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-all ${hasChem ? 'bg-amber-600 text-white border-amber-700 font-bold' : 'bg-white text-gray-500'}`}>
+                                                                    {c}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            <div class="flex gap-2 justify-end pt-2">
+                                                <button type="button" onClick={() => setShowHistoryForm(false)} class="px-4 py-2 border rounded-xl bg-white font-bold">취소</button>
+                                                <button type="submit" class="px-5 py-2 bg-emerald-700 text-white rounded-xl font-bold">기록 추가</button>
+                                            </div>
+                                        </form>
+                                    )}
+
+                                    {/* 과거 히스토리 목록 */}
+                                    <div class="space-y-3 pt-2">
+                                        <h4 class="text-xs font-bold text-gray-400">📋 과거 방역 히스토리</h4>
+                                        {(selectedItem.history || []).map((h) => (
+                                            <div key={h.id} class="p-4 bg-gray-50 border rounded-2xl text-xs space-y-1 relative group">
+                                                <button onClick={() => handleDeleteHistory(h.id)} class="absolute top-3 right-3 text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm">🗑️ 삭제</button>
+                                                <div class="flex justify-between items-center mb-1">
+                                                    <span class="font-bold text-emerald-800 text-sm">✅ {h.type} 완료</span>
+                                                    <span class="font-mono text-gray-400 text-[11px] mr-10">{h.date}</span>
+                                                </div>
+                                                {h.chemicals && h.chemicals.length > 0 && <p class="text-[11px] text-gray-600 font-medium">💊 약품: {h.chemicals.join(", ")}</p>}
+                                                <p class="text-[10px] text-gray-400 pt-1">출동대원: {h.author}</p>
+                                                {h.type === "방역" && (
+                                                    <button onClick={() => { setCertEntry(h); setIsCertOpen(true); }} class="mt-3 w-full bg-white border border-emerald-200 text-emerald-800 text-xs py-2 rounded-xl font-bold shadow-sm hover:bg-emerald-50 transition-all">📄 이 날짜로 소독증명서 발급</button>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             </div>
+                        )}
+                    </div>
 
-                            {/* 🔎 [우측 서스펜스 정보 슬라이드 바 창] */}
-                            {selectedItem && (
-                                <div class="w-[430px] border-l bg-white h-full shadow-2xl flex flex-col z-20 animate-slide-in">
-                                    <div class="p-4 border-b flex justify-between items-center bg-gray-50/70">
-                                        <div>
-                                            <h3 class="text-sm font-bold text-gray-800 flex items-center gap-2">🟢 {selectedItem.name}</h3>
-                                            <p class="text-[11px] text-gray-400 mt-0.5">{selectedItem.gu} {selectedItem.dong || ""}</p>
-                                        </div>
-                                        <button onClick={() => setSelectedItem(null)} class="text-xl font-bold text-gray-400 hover:text-black">×</button>
-                                    </div>
-
-                                    <div class="p-4 flex-1 overflow-y-auto space-y-4">
-                                        <div class="grid grid-cols-2 gap-3 bg-gray-50 p-3.5 rounded-2xl border border-gray-100 text-xs">
-                                            <div><p class="text-gray-400">담당 매니저</p><p class="font-bold text-gray-800 mt-0.5">{selectedItem.manager || "이원식"}</p></div>
-                                            <div><p class="text-gray-400">연락처</p><p class="font-mono font-bold text-gray-800 mt-0.5">{selectedItem.phone || "010-0000-0000"}</p></div>
-                                            <div class="col-span-2"><p class="text-gray-400">소재지 주소</p><p class="font-bold text-gray-800 mt-0.5">{selectedItem.address || "등록된 주소가 없습니다."}</p></div>
-                                            <div><p class="text-gray-400">면적</p><p class="font-bold text-gray-800 mt-0.5">{selectedItem.area || "30"}평</p></div>
-                                            <div><p class="text-gray-400">방역 주기</p><p class="font-bold text-[#0E7A63] mt-0.5">{selectedItem.cycle || "월1회"}</p></div>
-                                            <div><p class="text-gray-400">계약 금액</p><p class="font-mono font-bold text-gray-800 mt-0.5">₩{Number(selectedItem.fee || 30000).toLocaleString()}</p></div>
-                                        </div>
-
-                                        <div class="flex gap-1.5">
-                                            <button type="button" onClick={() => setShowHistoryForm(!showHistoryForm)} class="flex-1 bg-emerald-50 text-emerald-800 font-bold text-xs py-2 rounded-xl border border-emerald-200">+ 방역기록 추가</button>
-                                            <button type="button" class="flex-1 bg-gray-100 text-gray-700 text-xs py-2 rounded-xl border">✏️ 수정</button>
-                                        </div>
-
-                                        {showHistoryForm && (
-                                            <form onSubmit={handleAddHistory} class="border p-4 rounded-2xl bg-gray-50 space-y-3 text-xs animate-fade-in">
-                                                <p class="font-bold text-gray-700 border-b pb-1.5">📝 현장 방역 기록 즉시 추가</p>
-                                                <label class="block"><b>기록 유형</b>
-                                                    <select value={historyForm.type} onChange={e => setHistoryForm({...historyForm, type: e.target.value})} class="w-full mt-1 p-2 bg-white border rounded-xl">
-                                                        <option value="방역">방역 완료</option><option value="상담">상담 기록</option>
-                                                    </select>
-                                                </label>
-                                                <label class="block"><b>방역 실시 일자</b><input type="date" value={historyForm.date} onChange={e => setHistoryForm({...historyForm, date: e.target.value})} class="w-full mt-1 p-2 bg-white border rounded-xl" /></label>
-                                                <label class="block"><b>출동대원</b>
-                                                    <select value={historyForm.author} onChange={e => setHistoryForm({...historyForm, author: e.target.value})} class="w-full mt-1 p-2 bg-white border rounded-xl">
-                                                        {STAFF.map(s => <option key={s} value={s}>{s}</option>)}
-                                                    </select>
-                                                </label>
-                                                <div class="flex gap-2 justify-end">
-                                                    <button type="button" onClick={() => setShowHistoryForm(false)} class="px-3 py-1.5 border rounded-xl bg-white">취소</button>
-                                                    <button type="submit" class="px-3 py-1.5 bg-[#0E7A63] text-white rounded-xl font-bold">이력 저장</button>
-                                                </div>
-                                            </form>
-                                        )}
-
-                                        <div class="space-y-3 pt-2">
-                                            <h4 class="text-xs font-bold text-gray-400">📋 가맹점 과거 방역 히스토리</h4>
-                                            {(selectedItem.history || []).map((h, idx) => (
-                                                <div key={h.id || idx} class="p-3 bg-gray-50 border rounded-xl text-xs space-y-1 relative group">
-                                                    <button type="button" onClick={() => handleDeleteHistory(h.id)} class="absolute top-2 right-2 text-gray-400 hover:text-red-600 text-[10px] font-bold">🗑️ 삭제</button>
-                                                    <div class="flex justify-between items-center">
-                                                        <span class={`font-bold ${h.type === '방역' ? 'text-emerald-800' : 'text-blue-800'}`}>✅ {h.type} 완료</span>
-                                                        <span class="font-mono text-gray-400 text-[11px] mr-8">{h.date}</span>
-                                                    </div>
-                                                    <p class="text-gray-700 font-medium">{h.content}</p>
-                                                    <p class="text-[10px] text-gray-400">출동대원: {h.author}</p>
-                                                    {h.type === "방역" && (
-                                                        <button type="button" onClick={() => { setCertRecord(selectedItem); setCertEntry(h); setIsCertOpen(true); }} class="mt-2 bg-white border border-emerald-200 text-emerald-800 text-[11px] px-2.5 py-1 rounded-lg font-bold shadow-sm hover:bg-emerald-50 transition-all">📄 이 날짜로 소독증명서 발급</button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        /* ================= [고객 자가조회 모드 뷰] ================= */
-                        <div class="max-w-sm mx-auto bg-white p-6 rounded-3xl border border-gray-200 shadow-md mt-16">
-                            <h2 class="text-base font-bold text-center text-[#16241E]">소독증명서 원클릭 자가발급</h2>
-                            <form onSubmit={handleCustomerSearch} class="flex flex-col gap-3 mt-4">
-                                <input type="text" value={bizInput} onChange={e => setBizInput(e.target.value)} placeholder="사업자번호 또는 가맹점명 입력" class="w-full p-3 border rounded-xl text-center font-bold text-base focus:border-[#0E7A63] outline-none bg-gray-50" />
-                                <button type="submit" class="w-full bg-[#0E7A63] text-white font-bold p-3 rounded-xl text-xs">조회하기</button>
-                            </form>
-                            {searchError && <p class="text-xs text-red-500 text-center mt-3 font-semibold">{searchError}</p>}
-                            {searchResult && (
-                                <div class="mt-5 p-4 bg-[#E3F2EC] rounded-2xl border border-[#0E7A63]/10">
-                                    <p class="text-xs font-bold text-[#0B5E4D] text-center">✅ 가맹점 조회 확인 완료</p>
-                                    <button type="button" onClick={() => { setCertRecord(searchResult); setCertEntry(searchResult.history?.find(x => x.type === "방역") || {date: TODAY, author: "이원식"}); setIsCertOpen(true); }} class="w-full bg-[#0B5E4D] text-white text-xs font-bold p-2.5 rounded-xl hover:opacity-90 mt-3">📄 최신 소독증명서 인쇄 / 다운로드</button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* 신규 등록 모달 팝업 */}
+                    {/* 모달: 신규 등록 창 */}
                     {isModalOpen && (
-                        <div class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-                            <div class="bg-white rounded-2xl max-w-sm w-full p-4 max-h-[85vh] overflow-y-auto">
-                                <div class="flex justify-between items-center pb-2 border-b border-gray-200 mb-3">
-                                    <h3 class="text-sm font-bold">신규 거래처 현장 등록</h3>
-                                    <button type="button" onClick={() => setIsModalOpen(false)} class="text-lg font-bold">×</button>
+                        <div class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                            <form onSubmit={handleRegister} class="bg-white rounded-3xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+                                <h3 class="text-lg font-bold mb-4 border-b pb-2">신규 업체 등록</h3>
+                                <div class="grid grid-cols-2 gap-3 text-xs">
+                                    <label class="col-span-2"><b>등록 탭 구분 *</b>
+                                        <select name="tab" class="w-full p-2 border rounded-lg mt-1 bg-gray-50"><option value="active">방역 거래처 (운영)</option><option value="prospect">영업처 (대기)</option></select>
+                                    </label>
+                                    <label class="col-span-2"><b>상호명 *</b><input name="name" required class="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>담당 대원 *</b><select name="manager" class="w-full p-2 border rounded-lg mt-1">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
+                                    <label><b>연락처 *</b><input name="phone" required class="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label class="col-span-2"><b>주소 *</b><input name="address" required class="w-full p-2 border rounded-lg mt-1" /></label>
+                                    
+                                    <label class="col-span-2 text-emerald-800 font-bold border-t pt-2 mt-2">필수 관리 항목</label>
+                                    <label><b>방역시작일 *</b><input type="date" name="contractStart" defaultValue={TODAY} required class="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>평수 (면적) *</b><input name="area" defaultValue="30" class="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>계약 금액 *</b><input name="fee" defaultValue="30000" class="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>방역 주기 *</b><select name="cycle" class="w-full p-2 border rounded-lg mt-1">{CYCLES.map(c=><option key={c}>{c}</option>)}</select></label>
+                                    <label><b>방역 구분 *</b><select name="serviceType" class="w-full p-2 border rounded-lg mt-1"><option>정기</option><option>분기</option></select></label>
+                                    <label><b>결제 상태 *</b><select name="payStatus" class="w-full p-2 border rounded-lg mt-1"><option>유료</option><option>무료</option><option>일시중지</option><option>해지</option></select></label>
                                 </div>
-                                <form onSubmit={(e) => {
-                                    e.preventDefault();
-                                    const fd = new FormData(e.target);
-                                    const record = Object.fromEntries(fd.entries());
-                                    handleRegister(record, "active");
-                                }}>
-                                    <div class="flex flex-col gap-2.5 text-xs">
-                                        <label class="block"><b>업체 상호명 *</b><input name="name" required class="w-full mt-1 p-2 border rounded-xl outline-none" /></label>
-                                        <label class="block"><b>사업자등록번호 *</b><input name="businessNumber" placeholder="000-00-00000" required class="w-full mt-1 p-2 border rounded-xl outline-none" /></label>
-                                        <label class="block"><b>대표/담당자 성명 *</b><input name="contactName" required class="w-full mt-1 p-2 border rounded-xl outline-none" /></label>
-                                        <label class="block"><b>연락처 *</b><input name="phone" required class="w-full mt-1 p-2 border rounded-xl outline-none" /></label>
-                                        <label class="block"><b>소재지 상세주소</b><input name="address" class="w-full mt-1 p-2 border rounded-xl outline-none" /></label>
-                                        <label class="block"><b>실시 면적 (평수)</b><input name="area" defaultValue="30" class="w-full mt-1 p-2 border rounded-xl outline-none" /></label>
-                                        <label class="block"><b>담당 관리자</b>
-                                            <select name="manager" class="w-full mt-1 p-2 border rounded-xl bg-white outline-none">
-                                                {STAFF.map(s => <option key={s} value={s}>{s}</option>)}
-                                            </select>
-                                        </label>
-                                        <div class="flex gap-2 justify-end mt-4">
-                                            <button type="button" onClick={() => setIsModalOpen(false)} class="px-3 py-1.5 border rounded-xl">취소</button>
-                                            <button type="submit" class="px-3 py-1.5 bg-[#0E7A63] text-white rounded-xl font-bold">대시보드 즉시등록</button>
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
+                                <div class="flex gap-2 justify-end mt-6">
+                                    <button type="button" onClick={() => setIsModalOpen(false)} class="px-5 py-2 border rounded-xl bg-gray-100 font-bold text-xs">취소</button>
+                                    <button type="submit" class="px-6 py-2 bg-emerald-700 text-white rounded-xl font-bold text-xs">등록 완료</button>
+                                </div>
+                            </form>
                         </div>
                     )}
 
-                    {/* 📄 [별지 제28호서식 기반 소독증명서 팝업창 모달] */}
-                    {isCertOpen && certRecord && (
+                    {/* 모달: 정식 소독증명서 출력 (법정 서식 광폭 A4 + 인감도장) */}
+                    {isCertOpen && selectedItem && (
                         <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-                            <div class="bg-white rounded-2xl p-6 max-w-3xl w-full max-h-[96vh] overflow-y-auto my-auto">
-                                <div class="bg-gray-50 border p-3 rounded-xl mb-4 text-xs space-y-3">
-                                    <p class="font-bold text-emerald-800">🛠️ 증명서 발급 실시간 커스텀 설정</p>
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <label class="block"><b>법인 확인 인감 도장 이미지 즉시 업로드:</b>
-                                            <input type="file" accept="image/*" onChange={handleSealUpload} class="text-[11px] block w-full mt-1" />
-                                        </label>
-                                        <div class="flex items-end justify-end">
-                                            <button type="button" onClick={() => setSealImage(null)} class="text-[11px] text-gray-400 underline hover:text-red-600">업로드 인장 지우기</button>
-                                        </div>
-                                    </div>
+                            <div class="bg-white rounded-3xl p-8 max-w-3xl w-full max-h-[96vh] overflow-y-auto my-auto shadow-2xl">
+                                <div class="bg-gray-50 border p-4 rounded-2xl mb-6 text-xs flex justify-between items-center">
                                     <div>
-                                        <p class="font-semibold mb-1 text-gray-600">사용 약품 내용 선택 (클릭 시 하단 서식에 즉시 반영):</p>
-                                        <div class="flex flex-wrap gap-1">
-                                            {CERT_CHEMICALS_LIST.map(c => {
-                                                const hasChem = (certEntry?.chemicals || []).includes(c);
-                                                return (
-                                                    <button type="button" key={c} 
-                                                        onClick={() => {
-                                                            const currentChems = certEntry?.chemicals || [];
-                                                            const updatedChems = currentChems.includes(c) ? currentChems.filter(x => x !== c) : [...currentChems, c];
-                                                            setCertEntry({...certEntry, chemicals: updatedChems});
-                                                        }} 
-                                                        class={`px-2 py-1 rounded border text-[11px] font-medium transition-all ${hasChem ? 'bg-amber-600 text-white border-amber-700 font-bold' : 'bg-white text-gray-500'}`}>
-                                                        {c}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
+                                        <p class="font-bold text-emerald-800 mb-1">🖨️ 법인 인감 도장 이미지 첨부</p>
+                                        <input type="file" accept="image/*" onChange={handleSealUpload} class="text-[11px]" />
                                     </div>
+                                    <button onClick={() => setSealImage(null)} class="text-gray-400 underline hover:text-red-500">도장 지우기</button>
                                 </div>
 
                                 <div id="cert-print-area" class="border border-black p-12 bg-white text-black text-[13px] leading-relaxed relative mx-auto" style={{ width: "210mm", minHeight: "297mm" }}>
-                                    <p class="text-[10px] text-gray-400 font-medium mb-2">■ 감염병의 예방 및 관리에 관한 법률 시행규칙 [별지 제28호서식] <span class="float-right text-black font-bold text-[13px]">제 26-02-264 호</span></p>
+                                    <p class="text-[10px] text-gray-500 font-medium mb-2">■ 감염병의 예방 및 관리에 관한 법률 시행규칙 [별지 제28호서식] <span class="float-right text-black font-bold text-[13px]">제 26-02-264 호</span></p>
                                     <h2 class="text-center text-3xl font-black tracking-[0.6em] my-14 pt-6">소 독 증 명 서</h2>
                                     <table class="w-full border-collapse border border-black text-left my-10">
                                         <tbody>
                                             <tr>
                                                 <td class="border border-black p-5 bg-gray-50 font-bold text-center w-28 text-[14px]" rowspan="2">대상 시설</td>
                                                 <td class="border border-black p-5 bg-gray-50 font-bold w-28 text-[14px]">상호(명칭)</td>
-                                                <td class="border border-black p-5 font-bold text-[15px]">{certRecord.name}</td>
+                                                <td class="border border-black p-5 font-bold text-[15px]">{selectedItem.name}</td>
                                                 <td class="border border-black p-5 bg-gray-50 font-bold w-36 text-[14px]">실시 면적(용적)</td>
-                                                <td class="border border-black p-5 font-mono text-[14px]">({certRecord.area || "30"}평 ㎡²)</td>
+                                                <td class="border border-black p-5 font-mono text-[14px]">({selectedItem.area || "30"}평 ㎡²)</td>
                                             </tr>
                                             <tr>
                                                 <td class="border border-black p-5 bg-gray-50 font-bold text-[14px]">소재지</td>
-                                                <td class="border border-black p-5 text-[14px]" colspan="3">{certRecord.address || "부산 관내 가맹점 소재지"}</td>
+                                                <td class="border border-black p-5 text-[14px]" colspan="3">{selectedItem.address}</td>
                                             </tr>
                                             <tr>
                                                 <td class="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" colspan="2">관리(운영)자 확인</td>
@@ -436,16 +460,16 @@
                                             <tr>
                                                 <td class="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" rowspan="2">소독 내용</td>
                                                 <td class="border border-black p-5 bg-gray-50 font-bold text-[14px]">종류</td>
-                                                <td class="border border-black p-5 text-[14px]" colspan="3">{(certEntry?.methods && certEntry.methods.length > 0) ? certEntry.methods.join(", ") : "살충 잔류 분무, 독 먹이법"}</td>
+                                                <td class="border border-black p-5 text-[14px]" colspan="3">{(certEntry?.methods && certEntry.methods.length > 0) ? certEntry.methods.map(m=>m+" 잔류 분무").join(", ") : "살충 잔류 분무"}</td>
                                             </tr>
                                             <tr>
                                                 <td class="border border-black p-5 bg-gray-50 font-bold text-[14px]">약품 사용 내용</td>
-                                                <td class="border border-black p-5 font-medium text-[14px]" colspan="3">{(certEntry?.chemicals && certEntry.chemicals.length > 0) ? certEntry.chemicals.join(", ") : "롱다운플러스, 맥스포스 셀렉트 이지갤"}</td>
+                                                <td class="border border-black p-5 font-medium text-[14px]" colspan="3">{(certEntry?.chemicals && certEntry.chemicals.length > 0) ? certEntry.chemicals.join(", ") : "롱다운플러스"}</td>
                                             </tr>
                                         </tbody>
                                     </table>
                                     <p class="my-20 text-[14px] text-justify leading-loose text-gray-900 px-3">&nbsp;&nbsp;&nbsp;「감염병의 예방 및 관리에 관한 법률」 제54조제1항 및 같은 법 시행규칙 제40조제2항에 따라 위와 같이 소독을 실시하였음을 증명합니다.</p>
-                                    <h3 class="text-center font-bold text-[15px] my-16 tracking-widest">2026 년 &nbsp;&nbsp;&nbsp;&nbsp; 5 월 &nbsp;&nbsp;&nbsp;&nbsp; 27 일</h3>
+                                    <h3 class="text-center font-bold text-[15px] my-16 tracking-widest">2026 년 &nbsp;&nbsp;&nbsp;&nbsp; {certEntry?.date ? certEntry.date.split('-')[1] : '5'} 월 &nbsp;&nbsp;&nbsp;&nbsp; {certEntry?.date ? certEntry.date.split('-')[2] : '27'} 일</h3>
                                     <div class="mt-28 pt-10 border-t border-black text-[13px] space-y-3 relative">
                                         <p class="flex justify-between"><span><b>소독 실시자 상호(명칭)</b></span> <span class="font-bold text-right text-[14px]">{CERT_ISSUER.name}</span></p>
                                         <p class="flex justify-between"><span><b>소재지</b></span> <span class="text-right text-gray-700 text-[13px]">{CERT_ISSUER.address}</span></p>
@@ -457,9 +481,9 @@
                                         </p>
                                     </div>
                                 </div>
-                                <div class="flex justify-end gap-2 mt-4 border-t pt-3">
-                                    <button type="button" onClick={() => setIsCertOpen(false)} class="px-4 py-2 border rounded-xl text-xs bg-white text-gray-500">창 닫기</button>
-                                    <button type="button" onClick={() => window.print()} class="px-6 py-2 bg-[#0B5E4D] text-white rounded-xl text-xs font-bold shadow-md hover:opacity-90 transition-all">🖨️ 정식 A4 서식 인쇄 / PDF 저장</button>
+                                <div class="flex justify-end gap-3 mt-6 border-t pt-4">
+                                    <button onClick={() => setIsCertOpen(false)} class="px-5 py-3 border rounded-xl text-xs bg-gray-100 font-bold">창 닫기</button>
+                                    <button onClick={() => window.print()} class="px-8 py-3 bg-[#0B5E4D] text-white rounded-xl text-xs font-bold shadow-md hover:opacity-90">🖨️ 정식 A4 서식 인쇄 및 PDF 저장</button>
                                 </div>
                             </div>
                         </div>
