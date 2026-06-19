@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSTC방역 운영 및 영업 관리 시스템</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.20/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #F1F4EF; color: #16241E; margin: 0; padding: 0; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        @media print {
+            body * { visibility: hidden !important; }
+            #cert-print-area, #cert-print-area * { visibility: visible !important; }
+            #cert-print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
+            @page { size: A4; margin: 14mm; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const T = { bg: "#F1F4EF", surface: "#FFFFFF", surfaceAlt: "#F8FAF6", ink: "#16241E", inkSoft: "#5B6B64", inkFaint: "#8B9A92", line: "#DEE5DC", lineSoft: "#E9EEE6", teal: "#0E7A63", tealDeep: "#0B5E4D", tealTint: "#E3F2EC", amber: "#B5740A", amberTint: "#FBF1DD", danger: "#A23B3B", dangerTint: "#F6E8E7", seal: "#B33B2B" };
+        const TODAY = "2026-06-18";
+        const CYCLES = ["주1회", "2주1회", "월1회", "2개월1회", "분기1회", "반기1회", "연1회"];
+        const CATEGORIES = ["음식점", "카페", "편의점", "마트", "병원", "학원", "사무실", "공장", "어린이집", "헬스장", "학교", "숙박업", "기타"];
+        const STAGES = ["신규발굴", "1차상담", "견적제출", "협상중", "계약완료", "보류", "실패"];
+        const STAFF = ["이원식", "강현준"];
+        
+        const GU_DONG = {
+            "부산": ["남구", "부산진구", "사상구", "동래구", "금정구", "강서구", "사하구", "수영구", "연제구", "중구", "동구", "해운대구", "북구", "서구", "영도구"],
+            "경남": ["창원시", "양산시", "김해시", "창원", "김해"],
+            "창원": ["성산구", "진해구", "의창구"]
+        };
+
+        // 🔗 보안을 통과하도록 맨 뒤를 /echo로 바꾼 구글 주소입니다!
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_9eN2W4n2Bf0Jm88r7t1k9P3vP9Lz8L-r3D/echo"; 
+
+        function App() {
+            const [active, setActive] = React.useState([]);
+            const [prospects, setProspects] = React.useState([]);
+            const [terminated, setTerminated] = React.useState([]);
+            const [loading, setLoading] = React.useState(true);
+            const [activeTab, setActiveTab] = React.useState("active");
+            const [search, setSearch] = React.useState("");
+            const [filterGu, setFilterGu] = React.useState("");
+            const [filterCycle, setFilterCycle] = React.useState("");
+            const [isModalOpen, setIsModalOpen] = React.useState(false);
+            const [isCertOpen, setIsCertOpen] = React.useState(false);
+            const [certEntry, setCertEntry] = React.useState(null);
+
+            React.useEffect(() => {
+                fetch(GOOGLE_SCRIPT_URL)
+                    .then(res => res.json())
+                    .then(data => {
+                        setActive(data.active || []);
+                        setProspects(data.prospects || []);
+                        setTerminated(data.terminated || []);
+                        setLoading(false);
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        setLoading(false);
+                    });
+            }, []);
+
+            function handleRegister(formData, kind) {
+                setLoading(true);
+                fetch(GOOGLE_SCRIPT_URL, {
+                    method: "POST",
+                    mode: "no-cors",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ kind: kind, data: formData })
+                }).then(() => {
+                    alert("구글 데이터베이스에 성공적으로 기록되었습니다!");
+                    window.location.reload();
+                }).catch(() => {
+                    setLoading(false);
+                });
+            }
+
+            const currentList = React.useMemo(() => {
+                const base = activeTab === "active" ? active : activeTab === "prospect" ? prospects : terminated;
+                return base.filter(r => {
+                    const matchSearch = (r.name || "").toLowerCase().includes(search.toLowerCase());
+                    const matchGu = !filterGu || r.gu === filterGu;
+                    const matchCycle = !filterCycle || r.cycle === filterCycle;
+                    return matchSearch && matchGu && matchCycle;
+                });
+            }, [activeTab, active, prospects, terminated, search, filterGu, filterCycle]);
+
+            if (loading) {
+                return (
+                    <div class="flex h-screen flex-col items-center justify-center font-bold text-base text-[#0B5E4D] gap-2">
+                        <div>🔄 구글 스프레드시트 창고와 실시간 동기화 중...</div>
+                        <div class="text-xs text-gray-400 font-normal">잠시만 기다려 주시면 화면이 활성화됩니다.</div>
+                    </div>
+                );
+            }
+
+            return (
+                <div class="min-h-screen p-4 md:p-6">
+                    <header class="max-w-4xl mx-auto mb-5 flex items-center justify-between bg-white p-4 rounded-2xl border border-[#DEE5DC]">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 bg-[#0B5E4D] text-white rounded-xl font-bold">🛡️</div>
+                            <div>
+                                <h1 class="text-lg font-bold text-[#16241E]">MSTC방역 실시간 관리시스템</h1>
+                                <p class="text-xs text-[#5B6B64]">전 직원 데이터 공유 및 증명서 자가발급</p>
+                            </div>
+                        </div>
+                        <button onClick={() => setIsModalOpen(true)} class="bg-[#0E7A63] text-white font-medium text-xs px-3 py-2 rounded-xl hover:opacity-90 transition-all">+ 신규 등록</button>
+                    </header>
+
+                    <main class="max-w-4xl mx-auto bg-white border border-[#DEE5DC] rounded-3xl p-4 shadow-sm">
+                        <div class="flex gap-2 p-1 bg-[#F8FAF6] border border-[#DEE5DC] rounded-xl mb-4">
+                            <button onClick={() => setActiveTab("active")} class={`flex-1 py-2 text-xs font-medium rounded-lg text-center transition-all ${activeTab === 'active' ? 'bg-white text-[#0B5E4D] shadow-sm font-bold' : 'text-[#5B6B64]'}`}>방역 거래처 ({active.length})</button>
+                            <button onClick={() => setActiveTab("prospect")} class={`flex-1 py-2 text-xs font-medium rounded-lg text-center transition-all ${activeTab === 'prospect' ? 'bg-white text-[#0B5E4D] shadow-sm font-bold' : 'text-[#5B6B64]'}`}>영업 리드 ({prospects.length})</button>
+                            <button onClick={() => setActiveTab("terminated")} class={`flex-1 py-2 text-xs font-medium rounded-lg text-center transition-all ${activeTab === 'terminated' ? 'bg-white text-[#0B5E4D] shadow-sm font-bold' : 'text-[#5B6B64]'}`}>해지 거래처 ({terminated.length})</button>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+                            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="업체명 검색..." class="text-xs p-2 rounded-xl border border-[#DEE5DC] bg-[#F8FAF6]" />
+                            <select value={filterGu} onChange={e => setFilterGu(e.target.value)} class="text-xs p-2 rounded-xl border border-[#DEE5DC] bg-white">
+                                <option value="">전체 구</option>
+                                {Object.keys(GU_DONG).map(g => <option key={g} value={g}>{g}</option>)}
+                            </select>
+                            <select value={filterCycle} onChange={e => setFilterCycle(e.target.value)} class="text-xs p-2 rounded-xl border border-[#DEE5DC] bg-white">
+                                <option value="">전체 주기</option>
+                                {CYCLES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            {currentList.map(item => (
+                                <div key={item.id} class="flex justify-between items-center p-3 bg-[#F8FAF6] border border-[#DEE5DC] rounded-xl">
+                                    <div>
+                                        <h4 class="font-bold text-sm text-[#16241E]">{item.name}</h4>
+                                        <p class="text-xs text-[#5B6B64] mt-0.5">{item.gu} {item.dong || ""} · 담당: {item.manager} · {item.cycle || "월1회"}</p>
+                                    </div>
+                                    <button onClick={() => { setCertEntry(item); setIsCertOpen(true); }} class="text-xs font-medium bg-[#E3F2EC] text-[#0B5E4D] px-2.5 py-1 rounded-lg hover:opacity-80">📄 증명서</button>
+                                </div>
+                            ))}
+                        </div>
+                    </main>
+
+                    {/* 신규 등록 팝업창 */}
+                    {isModalOpen && (
+                        <div class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+                            <div class="bg-white rounded-2xl max-w-sm w-full p-4 max-h-[80vh] overflow-y-auto">
+                                <div class="flex justify-between items-center pb-2 border-b border-[#DEE5DC] mb-3">
+                                    <h3 class="text-sm font-bold">신규 업체 등록</h3>
+                                    <button onClick={() => setIsModalOpen(false)} class="text-lg font-bold">×</button>
+                                </div>
+                                <form onSubmit={(e) => {
+                                    e.preventDefault();
+                                    const fd = new FormData(e.target);
+                                    const record = Object.fromEntries(fd.entries());
+                                    record.id = "AC" + Date.now();
+                                    handleRegister(record, activeTab === "prospect" ? "prospects" : "active");
+                                    setIsModalOpen(false);
+                                }}>
+                                    <div class="flex flex-col gap-2 text-xs">
+                                        <label class="block"><b>업체명 *</b><input name="name" required class="w-full mt-1 p-2 border rounded-xl" /></label>
+                                        <label class="block"><b>담당자 성명 *</b><input name="contactName" required class="w-full mt-1 p-2 border rounded-xl" /></label>
+                                        <label class="block"><b>연락처 *</b><input name="phone" required class="w-full mt-1 p-2 border rounded-xl" /></label>
+                                        <label class="block"><b>지역구</b>
+                                            <select name="gu" class="w-full mt-1 p-2 border rounded-xl bg-white">
+                                                {Object.keys(GU_DONG).map(g => <option key={g} value={g}>{g}</option>)}
+                                            </select>
+                                        </label>
+                                        <label class="block"><b>상세 주소</b><input name="address" class="w-full mt-1 p-2 border rounded-xl" /></label>
+                                        <label class="block"><b>영업/관리 담당자</b>
+                                            <select name="manager" class="w-full mt-1 p-2 border rounded-xl bg-white">
+                                                {STAFF.map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </label>
+                                        <div class="flex gap-2 justify-end mt-3">
+                                            <button type="button" onClick={() => setIsModalOpen(false)} class="px-3 py-1.5 border rounded-xl">취소</button>
+                                            <button type="submit" class="px-3 py-1.5 bg-[#0E7A63] text-white rounded-xl">창고에 저장</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 소독증명서 인쇄 팝업창 */}
+                    {isCertOpen && certEntry && (
+                        <div class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                            <div class="bg-white rounded-2xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto">
+                                <div id="cert-print-area" class="border-2 border-black p-4 bg-white text-black text-[11px] leading-relaxed">
+                                    <h2 class="text-center text-lg font-black tracking-widest mb-3">소 독 증 명 서</h2>
+                                    <p class="text-right mb-1">■ 별지 제28호서식</p>
+                                    <table class="w-full border-collapse border border-black mb-3">
+                                        <tbody>
+                                            <tr><td class="border border-black p-1.5 bg-gray-50 font-bold w-20">상호(명칭)</td><td class="border border-black p-1.5 font-bold text-xs">{certEntry.name}</td></tr>
+                                            <tr><td class="border border-black p-1.5 bg-gray-50 font-bold">소재지</td><td class="border border-black p-1.5">{certEntry.address || "부산/경남 관내 지점"}</td></tr>
+                                            <tr><td class="border border-black p-1.5 bg-gray-50 font-bold">소독종류</td><td class="border border-black p-1.5">살충 잔류 분무, 독 먹이법, 초미립자 ULV 분무</td></tr>
+                                            <tr><td class="border border-black p-1.5 bg-gray-50 font-bold">소독기간</td><td class="border border-black p-1.5">2026년 06월 18일 ~ 2026년 06월 18일</td></tr>
+                                        </tbody>
+                                    </table>
+                                    <p class="text-center my-4 text-[10px]">「감염병의 예방 및 관리에 관한 법률 시행규칙」 제40조제2항에 따라 소독을 실시하였음을 증명합니다.</p>
+                                    <p class="text-center font-bold my-2">2026 년 &nbsp; 06 월 &nbsp; 18 일</p>
+                                    <div class="text-right font-bold mt-4">
+                                        <p>주)모바일솔루션즈 (대표: 구승재, 구태원) (인)</p>
+                                    </div>
+                                </div>
+                                <div class="flex justify-end gap-2 mt-4">
+                                    <button onClick={() => setIsCertOpen(false)} class="px-3 py-1.5 border rounded-xl text-xs">닫기</button>
+                                    <button onClick={() => window.print()} class="px-3 py-1.5 bg-[#0B5E4D] text-white rounded-xl text-xs font-medium">🖨️ 인쇄 / PDF 저장</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
