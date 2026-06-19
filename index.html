@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>미캔&기타스톡 인증 체크</title>
+<style>
+  body { font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; max-width: 720px; margin: 0 auto; padding: 16px; background: #f7f7f5; }
+  h1 { font-size: 18px; }
+  .add-row { display: flex; gap: 6px; margin-bottom: 12px; }
+  .add-row input { flex: 1; padding: 8px; }
+  .add-row button, #search { padding: 8px; }
+  #search { width: 100%; box-sizing: border-box; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; }
+  th, td { padding: 8px 6px; text-align: center; font-size: 13px; border-bottom: 1px solid #eee; }
+  th { background: #fafafa; }
+  td.name { text-align: left; }
+  #status { font-size: 12px; color: #1d9e75; height: 16px; margin-bottom: 8px; }
+  input[type=number] { width: 44px; }
+  .summary { display: flex; gap: 10px; margin-bottom: 16px; }
+  .summary div { background: white; border-radius: 8px; padding: 10px 14px; flex: 1; }
+  .summary .label { font-size: 12px; color: #888; }
+  .summary .num { font-size: 20px; font-weight: bold; }
+  tr.incomplete { background: #fdeceb; }
+  tr.rest-row { background: #f0f0ee; color: #999; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: #888; margin-bottom: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+</style>
+</head>
+<body>
+  <h1>미캔&기타스톡 인증 체크</h1>
+  <div class="summary">
+    <div><div class="label">전체 인원</div><div class="num" id="totalCount">0</div></div>
+    <div><div class="label">오늘 완료(4/4)</div><div class="num" id="doneCount">0</div></div>
+    <div><div class="label">휴식</div><div class="num" id="restCount">0</div></div>
+  </div>
+  <div class="add-row">
+    <input id="newName" type="text" placeholder="새 멤버 아이디"/>
+    <button onclick="addMember()">추가</button>
+    <button onclick="toggleBulk()">목록 일괄 추가</button>
+  </div>
+  <div id="bulkBox" style="display:none; margin-bottom:12px;">
+    <textarea id="bulkText" rows="6" style="width:100%; box-sizing:border-box; padding:8px;" placeholder="엑셀에서 이름 한 줄에 하나씩 복사해서 여기 붙여넣으세요"></textarea>
+    <button onclick="bulkAdd()" style="margin-top:6px;">일괄 등록</button>
+  </div>
+  <input id="search" type="text" placeholder="이름 검색..." oninput="renderTable()"/>
+  <div id="status"></div>
+  <div class="legend">
+    <span><i style="background:#fdeceb;"></i>미달성</span>
+    <span><i style="background:#f0f0ee;"></i>휴식</span>
+  </div>
+  <table>
+    <thead>
+      <tr><th>No</th><th>아이디</th><th>휴식</th><th>1</th><th>2</th><th>3</th><th>4</th><th>추가</th><th>인증수</th><th>관리</th></tr>
+    </thead>
+    <tbody id="tbody"><tr><td colspan="10">불러오는 중...</td></tr></tbody>
+  </table>
+
+<script>
+// 여기에 Apps Script 배포 후 받은 웹 앱 URL을 넣으세요
+const API_URL = 'https://script.google.com/macros/s/AKfycbw6zCsYmkGHeGBVYNIHg3jrju6wfGkDYuyisY-c-W3HvwqbEmd8fhi4pbRPQLrbnaLS/exec';
+
+let members = [];
+
+async function loadData() {
+  setStatus('불러오는 중...');
+  const res = await fetch(API_URL);
+  const data = await res.json();
+  members = data.members;
+  renderTable();
+  setStatus('');
+}
+
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+
+function renderTable() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  let done = 0, rest = 0;
+  members.forEach(m => {
+    if (m.rest) rest++;
+    if (m.days.filter(Boolean).length === 4) done++;
+  });
+  members.forEach((m, idx) => {
+    if (q && !m.name.toLowerCase().includes(q)) return;
+    const checkedCount = m.days.filter(Boolean).length;
+    const total = m.rest ? '-' : checkedCount + m.extra;
+    const tr = document.createElement('tr');
+    if (m.rest) {
+      tr.className = 'rest-row';
+    } else if (checkedCount < 4) {
+      tr.className = 'incomplete';
+    }
+    tr.innerHTML = `
+      <td>${idx + 1}</td>
+      <td class="name"><span id="name-${m.row}">${m.name}</span></td>
+      <td><input type="checkbox" ${m.rest ? 'checked' : ''} onchange="updateField(${m.row}, 'rest', this.checked)"/></td>
+      ${m.days.map((d, i) => `<td><input type="checkbox" ${d ? 'checked' : ''} ${m.rest ? 'disabled' : ''} onchange="updateDay(${m.row}, ${i}, this.checked)"/></td>`).join('')}
+      <td><input type="number" min="0" value="${m.extra}" ${m.rest ? 'disabled' : ''} onchange="updateField(${m.row}, 'extra', parseInt(this.value)||0)"/></td>
+      <td><b>${total}</b></td>
+      <td>
+        <button style="padding:4px 6px; font-size:12px;" onclick="renameMember(${m.row}, '${m.name.replace(/'/g, "\\'")}')">수정</button>
+        <button style="padding:4px 6px; font-size:12px;" onclick="deleteMember(${m.row}, '${m.name.replace(/'/g, "\\'")}')">삭제</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('totalCount').textContent = members.length;
+  document.getElementById('doneCount').textContent = done;
+  document.getElementById('restCount').textContent = rest;
+}
+
+function findMember(row) {
+  return members.find(m => m.row === row);
+}
+
+async function pushUpdate(m) {
+  setStatus('저장 중...');
+  await fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'update', row: m.row, rest: m.rest, days: m.days, extra: m.extra })
+  });
+  setStatus('저장됨');
+  setTimeout(() => setStatus(''), 1200);
+}
+
+function updateDay(row, dayIdx, checked) {
+  const m = findMember(row);
+  m.days[dayIdx] = checked;
+  renderTable();
+  pushUpdate(m);
+}
+
+function updateField(row, field, value) {
+  const m = findMember(row);
+  m[field] = value;
+  renderTable();
+  pushUpdate(m);
+}
+
+async function addMember() {
+  const input = document.getElementById('newName');
+  const name = input.value.trim();
+  if (!name) return;
+  setStatus('추가 중...');
+  await fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'add', name })
+  });
+  input.value = '';
+  await loadData();
+}
+
+async function renameMember(row, oldName) {
+  const newName = prompt('새 이름을 입력하세요', oldName);
+  if (!newName || newName.trim() === '' || newName === oldName) return;
+  setStatus('수정 중...');
+  await fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'rename', row, name: newName.trim() })
+  });
+  await loadData();
+}
+
+async function deleteMember(row, name) {
+  if (!confirm(`${name} 님을 삭제할까요?`)) return;
+  setStatus('삭제 중...');
+  await fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'delete', row })
+  });
+  await loadData();
+}
+
+function toggleBulk() {
+  const box = document.getElementById('bulkBox');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+async function bulkAdd() {
+  const text = document.getElementById('bulkText').value;
+  const names = text.split('\n').map(s => s.trim()).filter(Boolean);
+  if (names.length === 0) return;
+  setStatus(`${names.length}명 추가 중...`);
+  for (const name of names) {
+    await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'add', name })
+    });
+  }
+  document.getElementById('bulkText').value = '';
+  document.getElementById('bulkBox').style.display = 'none';
+  await loadData();
+}
+
+loadData();
+</script>
+</body>
+</html>
