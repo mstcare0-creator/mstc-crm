@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>MSTC방역 통합 관리시스템</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.20/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+        const CHEMICALS = { 살균: ["마이크로켐 골드", "키니아 비실드"], 살충: ["롱다운플러스", "맥스포스"] };
+
+        function App() {
+            const [data, setData] = useState([
+                {id: 1, name: "삼성횟집", manager: "이원식", history: []}
+            ]);
+            const [selected, setSelected] = useState(null);
+            const [record, setRecord] = useState({ type: "살균", drugs: [] });
+
+            const addHistory = () => {
+                const newLog = { ...record, date: "2026-06-19" };
+                const updated = { ...selected, history: [newLog, ...selected.history] };
+                setData(data.map(d => d.id === updated.id ? updated : d));
+                setSelected(updated);
+            };
+
+            return (
+                <div class="max-w-4xl mx-auto p-6 flex gap-6">
+                    <div class="w-1/3 bg-white p-4 rounded-xl shadow">
+                        {data.map(i => <div onClick={() => setSelected(i)} class="p-2 border-b cursor-pointer">{i.name}</div>)}
+                    </div>
+                    {selected && (
+                        <div class="flex-1 bg-white p-6 rounded-xl shadow">
+                            <h2 class="font-bold text-xl mb-4">{selected.name}</h2>
+                            {/* 방역기록 추가 섹션 */}
+                            <div class="border p-4 rounded-xl mb-4">
+                                <select onChange={e => setRecord({...record, type: e.target.value})} class="w-full p-2 border mb-2">
+                                    <option value="살균">살균</option><option value="살충">살충</option>
+                                </select>
+                                <div class="flex flex-wrap gap-2 mb-2">
+                                    {CHEMICALS[record.type].map(c => (
+                                        <button onClick={() => setRecord({...record, drugs: [...record.drugs, c]})} class="px-2 py-1 bg-gray-200 rounded text-xs">{c}</button>
+                                    ))}
+                                </div>
+                                <button onClick={addHistory} class="bg-green-700 text-white px-4 py-2 rounded">기록 추가</button>
+                            </div>
+                            {/* 이력 리스트 */}
+                            {selected.history.map((h, idx) => (
+                                <div key={idx} class="p-3 bg-gray-50 mb-2 rounded">
+                                    <p class="font-bold">{h.type} 완료</p>
+                                    <p class="text-xs">약품: {h.drugs.join(", ")}</p>
+                                    <button class="text-[10px] text-blue-600 underline">소독증명서 발급</button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
