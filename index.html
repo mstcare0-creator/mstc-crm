@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>MSTC방역 통합 운영관리 시스템</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.20/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-4">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+        const STAFF = ["이원식", "강현준"];
+        const CHEMICALS = { 살균: ["마이크로켐 골드", "키니아 비실드"], 살충: ["롱다운플러스", "맥스포스 셀렉트 이지갤"] };
+
+        function App() {
+            const [data, setData] = useState([
+                {id: 1, name: "춘향이보쌈왕족발", manager: "강현준", address: "부산 동래구", status: "정상", history: [{id: 1, date: "2026-06-19", type: "방역", drugs: ["롱다운플러스"], author: "강현준"}]}
+            ]);
+            const [selected, setSelected] = useState(null);
+            const [search, setSearch] = useState("");
+            const [history, setHistory] = useState({ type: "살균", drugs: [] });
+
+            const filtered = data.filter(i => i.name.includes(search) || i.manager.includes(search));
+
+            const addLog = () => {
+                const newLog = { id: Date.now(), ...history, date: new Date().toISOString().split('T')[0] };
+                const updated = { ...selected, history: [newLog, ...selected.history] };
+                setData(data.map(d => d.id === updated.id ? updated : d));
+                setSelected(updated);
+            };
+
+            const deleteLog = (logId) => {
+                if(!confirm("삭제할까요?")) return;
+                const updated = { ...selected, history: selected.history.filter(h => h.id !== logId) };
+                setData(data.map(d => d.id === updated.id ? updated : d));
+                setSelected(updated);
+            };
+
+            return (
+                <div class="max-w-6xl mx-auto">
+                    {/* 상단 지표 카드 구역 (복구) */}
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="bg-white p-4 rounded-xl border">거래처 수 121</div>
+                        <div class="bg-white p-4 rounded-xl border">방역 예정 70</div>
+                        <div class="bg-white p-4 rounded-xl border">영업 건수 43</div>
+                        <div class="bg-white p-4 rounded-xl border">해지율 33.1%</div>
+                    </div>
+
+                    <div class="flex gap-6">
+                        <div class="flex-1 bg-white p-4 rounded-xl border">
+                            <input onChange={(e) => setSearch(e.target.value)} placeholder="검색 (업체명, 담당자)" class="w-full p-2 border rounded mb-4" />
+                            {filtered.map(item => (
+                                <div onClick={() => setSelected(item)} class="p-3 border-b cursor-pointer hover:bg-gray-50 flex justify-between">
+                                    <p class="font-bold text-sm">{item.name} <span class="text-xs text-gray-400">담당: {item.manager}</span></p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {selected && (
+                            <div class="w-96 bg-white p-6 rounded-xl border shadow-lg">
+                                <h2 class="font-bold text-lg mb-4">{selected.name}</h2>
+                                {/* 살균/살충 탭 분리 UI */}
+                                <div class="mb-4">
+                                    <select onChange={(e) => setHistory({...history, type: e.target.value, drugs: []})} class="w-full p-2 border mb-2">
+                                        <option value="살균">살균</option><option value="살충">살충</option>
+                                    </select>
+                                    <div class="flex flex-wrap gap-2">
+                                        {CHEMICALS[history.type].map(c => (
+                                            <button onClick={() => setHistory({...history, drugs: [...history.drugs, c]})} class="px-2 py-1 bg-gray-100 border rounded text-xs">{c}</button>
+                                        ))}
+                                    </div>
+                                    <button onClick={addLog} class="w-full bg-emerald-700 text-white mt-4 py-2 rounded">기록 추가</button>
+                                </div>
+                                {selected.history.map(h => (
+                                    <div key={h.id} class="flex justify-between items-center bg-gray-50 p-2 text-xs mb-2 rounded">
+                                        <div>{h.type} 완료 ({h.drugs.join(", ")})</div>
+                                        <button onClick={() => deleteLog(h.id)} class="text-red-500 font-bold">🗑️ 삭제</button>
+                                    </div>
+                                ))}
+                                <button class="w-full mt-4 bg-gray-200 py-2 rounded text-xs">✏️ 정보 수정</button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
