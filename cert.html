@@ -26,11 +26,10 @@
     <script type="text/babel">
         const { useState } = React;
 
-        // 💡 구글 시트 URL
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyJUCIKiumzq3QbFjZzSQq6mKWdw03AXCja8oH2mClGwUN6cv8CKJehdJLlkNHACqEY/exec";
         const CERT_ISSUER = { name: "주)모바일솔루션즈", address: "부산 강서구 명지국제2로28번길 24, 620호", reps: "구승재, 구태원" };
         
-        // 🚨 여기에 사장님의 진짜 도장 이미지 링크(URL)를 넣으시면 됩니다! (비워두면 기본 빨간 도장 아이콘이 뜹니다)
+        // 💡 나중에 사장님 실제 직인 이미지 URL을 여기에 넣으시면 됩니다.
         const COMPANY_SEAL_URL = ""; 
 
         function App() {
@@ -38,15 +37,13 @@
             const [clientData, setClientData] = useState(null);
             const [error, setError] = useState("");
             const [loading, setLoading] = useState(false);
-            const [certNumber, setCertNumber] = useState(""); // 자동 생성되는 증명서 번호
+            const [certNumber, setCertNumber] = useState(""); // 💡 자동 생성 증명서 번호
 
             const searchCert = (e) => {
                 e.preventDefault();
                 if(!bizNum) return;
                 
-                setLoading(true); 
-                setError(""); 
-                setClientData(null);
+                setLoading(true); setError(""); setClientData(null);
                 
                 fetch(GOOGLE_SCRIPT_URL)
                     .then(res => res.json())
@@ -89,7 +86,6 @@
                         <p className="text-sm text-gray-500 font-medium">MSTC방역 고객사 전용 발급 포털</p>
                     </div>
 
-                    {/* 🔍 검색 폼 */}
                     {!clientData && (
                         <form onSubmit={searchCert} className="max-w-md mx-auto flex flex-col gap-4">
                             <input 
@@ -107,7 +103,6 @@
                         </form>
                     )}
 
-                    {/* 📄 증명서 결과창 */}
                     {clientData && (
                         <div className="animate-fade-in mt-2">
                             <div className="flex justify-end mb-6 print:hidden gap-2">
@@ -117,7 +112,6 @@
 
                             <div id="print-area" className="border border-black p-8 md:p-12 bg-white text-black text-[13px] leading-relaxed mx-auto w-full max-w-[210mm] shadow-sm print:shadow-none print:border-0" style={{ boxSizing: "border-box" }}>
                                 
-                                {/* 💡 자동 부여된 증명서 번호 표시 */}
                                 <div className="flex justify-between items-start mb-2">
                                     <p className="text-[10px] text-gray-500 font-medium">■ 감염병의 예방 및 관리에 관한 법률 시행규칙 [별지 제28호서식]</p>
                                     <p className="font-bold text-[13px]">{certNumber}</p>
@@ -170,11 +164,10 @@
                                     <p className="flex justify-between relative">
                                         <span><b>성명(대표자)</b></span> <span className="font-bold text-right mr-16 text-[13px] md:text-[14px]">{CERT_ISSUER.reps}</span>
                                         <span className="absolute right-0 top-[-10px]">
-                                            {/* 💡 자동 날인 영역 */}
                                             {COMPANY_SEAL_URL ? (
                                                 <img src={COMPANY_SEAL_URL} alt="직인" className="w-14 h-14 object-contain rounded-full" />
                                             ) : (
-                                                <span className="text-red-600 font-bold border-2 border-red-600 rounded-full w-12 h-12 flex items-center justify-center text-[10px] transform rotate-[-6deg] bg-white/40">법인인장</span>
+                                                <span className="text-red-600 font-bold border-2 border-red-600 rounded-full w-10 h-10 flex items-center justify-center text-[8px] transform rotate-[-6deg] bg-white/40">법인인장</span>
                                             )}
                                         </span>
                                     </p>
