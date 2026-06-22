@@ -52,15 +52,15 @@
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
                             setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v18", JSON.stringify(fetchedData));
+                            localStorage.setItem("mstc_crm_data_v19", JSON.stringify(fetchedData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v18");
+                            const local = localStorage.getItem("mstc_crm_data_v19");
                             if(local) setData(JSON.parse(local));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v18");
+                        const local = localStorage.getItem("mstc_crm_data_v19");
                         if(local) setData(JSON.parse(local));
                         setLoading(false);
                     });
@@ -68,7 +68,7 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v18", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v19", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
@@ -119,8 +119,6 @@
             const [isCertOpen, setIsCertOpen] = useState(false);
             const [certEntry, setCertEntry] = useState(null);
             const [certNumber, setCertNumber] = useState("");
-            
-            // 💡 [에러 해결!] 지난번에 실수로 빠졌던 도장 에러 감지 스위치를 추가했습니다!
             const [sealImgFailed, setSealImgFailed] = useState(false); 
 
             const handleAddCustomMethod = () => {
@@ -160,8 +158,6 @@
                     id: "AC" + Date.now(), tab: regTab,
                     name: fd.get("name"), manager: fd.get("manager"), phone: fd.get("phone"),
                     bizNumber: fd.get("bizNumber") || "", 
-                    clientTitle: fd.get("clientTitle") || "대표",
-                    clientName: fd.get("clientName") || "",     
                     gu: fd.get("gu"), dong: fd.get("dong"), address: fd.get("address"), area: fd.get("area"),
                     contractStart: fd.get("contractStart"), serviceType: fd.get("serviceType"), payStatus: payStat,
                     cycle: fd.get("cycle"), fee: fd.get("fee"), etcInfo: fd.get("etcInfo") || "",
@@ -236,7 +232,6 @@
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item)); setSelectedItem(updatedItem);
             };
 
-            // 💡 [안전장치] 구글 시트의 빈칸 때문에 오류나지 않도록 `|| ""` 추가
             const currentList = useMemo(() => {
                 return data.filter(r => {
                     if (r.tab !== currentTab) return false;
@@ -282,8 +277,6 @@
             }, [data, chartManager]);
 
             const maxChartVal = Math.max(1, ...chartStats.map(s => Math.max(s.newCount, s.termCount, Math.abs(s.netCount))));
-            
-            // 💡 [안전장치] 빈 배열 체크 추가
             const hasCustomMethodSelected = (historyForm.methods || []).some(m => !["살균", "살충"].includes(m));
 
             if (loading) return <div className="flex items-center justify-center min-h-screen font-bold text-emerald-800">데이터 로드 중... 잠시만 기다려주세요!</div>;
@@ -406,10 +399,6 @@
                                                 <div className="grid grid-cols-2 gap-3 text-xs">
                                                     <label className="col-span-2">상호명 <input value={editForm.name || ""} onChange={e=>setEditForm({...editForm, name: e.target.value})} className="border p-2 w-full rounded outline-none" required /></label>
                                                     <label className="col-span-2">사업자등록번호 <input value={editForm.bizNumber || ""} onChange={e=>setEditForm({...editForm, bizNumber: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="고객 증명서 조회용 (숫자만 입력)" /></label>
-                                                    
-                                                    <label>고객 직위 <select value={editForm.clientTitle || "대표"} onChange={e=>setEditForm({...editForm, clientTitle: e.target.value})} className="border p-2 w-full rounded outline-none"><option>대표</option><option>점장</option><option>원장</option><option>소장</option><option>매니저</option></select></label>
-                                                    <label>고객 성명 <input value={editForm.clientName || ""} onChange={e=>setEditForm({...editForm, clientName: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="미입력 시 빈칸 출력" /></label>
-                                                    
                                                     <label>담당 대원 <select value={editForm.manager || ""} onChange={e=>setEditForm({...editForm, manager: e.target.value})} className="border p-2 w-full rounded outline-none">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
                                                     <label>평수 <input value={editForm.area || ""} onChange={e=>setEditForm({...editForm, area: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
                                                     <label className="col-span-2 flex gap-2">
@@ -439,11 +428,9 @@
                                         ) : (
                                             <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-xs">
                                                 <div className="col-span-2 border-b pb-2 mb-2"><p className="text-gray-400">사업자등록번호</p><p className="font-mono font-bold text-gray-800 mt-1">{selectedItem.bizNumber || "미등록"}</p></div>
-                                                
-                                                <div><p className="text-gray-400">고객 직위/성명</p><p className="font-bold text-blue-800 mt-1">{selectedItem.clientTitle || "대표"} {selectedItem.clientName || ""}</p></div>
-                                                <div><p className="text-gray-400">담당 대원</p><p className="font-bold mt-1">{selectedItem.manager}</p></div>
-                                                
-                                                <div className="col-span-2"><p className="text-gray-400">연락처 / 주소</p><p className="font-bold mt-1">{selectedItem.phone} <br/><span className="font-normal text-gray-600">{selectedItem.gu} {selectedItem.dong} {selectedItem.address}</span></p></div>
+                                                <div><p className="text-gray-400">담당자</p><p className="font-bold mt-1">{selectedItem.manager}</p></div>
+                                                <div><p className="text-gray-400">연락처</p><p className="font-mono font-bold mt-1">{selectedItem.phone}</p></div>
+                                                <div className="col-span-2"><p className="text-gray-400">주소</p><p className="font-bold mt-1">{selectedItem.gu} {selectedItem.dong} {selectedItem.address}</p></div>
                                                 
                                                 <div className="col-span-2 border-t pt-3 mt-1 grid grid-cols-2 gap-4">
                                                     <div><p className="text-gray-400">방역시작일</p><p className="font-mono font-bold text-[#0B5E4D] mt-1">{selectedItem.contractStart || "미기입"}</p></div>
@@ -582,7 +569,6 @@
                                                     </div>
                                                 )}
                                                 
-                                                {/* 💡 [에러 수정] hasCustomMethodSelected 검증 로직 안전화 */}
                                                 {((historyForm.methods || []).some(m => !["살균", "살충"].includes(m))) && (
                                                     <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl">
                                                         <p className="font-bold text-blue-800 mb-2">🏷️ 기타 방식 약품 선택 및 직접 입력</p>
@@ -665,7 +651,42 @@
                         </div>
                     </div>
 
-                    {/* 증명서 인쇄 모달 */}
+                    {/* 신규 등록 모달 (기본값 영업처 고정 버그 수정) */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                            <form onSubmit={handleRegister} className="bg-white rounded-3xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+                                <h3 className="text-lg font-bold mb-4 border-b pb-2">신규 업체 등록</h3>
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <label className="col-span-2"><b>등록 탭 구분 *</b>
+                                        <select name="tab" defaultValue={currentTab === "prospect" ? "prospect" : "active"} className="w-full p-2 border rounded-lg mt-1 bg-gray-50"><option value="active">방역 거래처 (운영)</option><option value="prospect">영업처 (대기)</option></select>
+                                    </label>
+                                    <label className="col-span-2"><b>상호명 *</b><input name="name" required className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label className="col-span-2"><b>사업자등록번호 (선택)</b><input name="bizNumber" className="w-full p-2 border rounded-lg mt-1" placeholder="고객 증명서 조회용 (숫자만 입력)" /></label>
+                                    <label><b>담당 대원 *</b><select name="manager" className="w-full p-2 border rounded-lg mt-1">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
+                                    <label><b>연락처 *</b><input name="phone" required className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label className="col-span-2 flex gap-2">
+                                        <div className="flex-1"><b>시/도 *</b><select name="gu" value={regCity} onChange={e=>setRegCity(e.target.value)} className="border p-2 w-full rounded-lg mt-1 bg-white">{Object.keys(REGIONS).map(r=><option key={r} value={r}>{r}</option>)}</select></div>
+                                        <div className="flex-1"><b>구/군 *</b><select name="dong" className="border p-2 w-full rounded-lg mt-1 bg-white">{REGIONS[regCity].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
+                                    </label>
+                                    <label className="col-span-2"><b>상세주소 *</b><input name="address" required className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label className="col-span-2 text-emerald-800 font-bold border-t pt-2 mt-2">필수 관리 항목</label>
+                                    <label><b>방역시작일 *</b><input type="date" name="contractStart" defaultValue={TODAY} required className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>평수 (면적) *</b><input name="area" defaultValue="30" className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>계약 금액 *</b><input type="number" name="fee" defaultValue="30000" className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>방역 주기 *</b><select name="cycle" className="w-full p-2 border rounded-lg mt-1">{CYCLES.map(c=><option key={c}>{c}</option>)}</select></label>
+                                    <label><b>방역 구분 *</b><select name="serviceType" className="w-full p-2 border rounded-lg mt-1"><option>정기</option><option>분기</option><option>무료</option></select></label>
+                                    <label><b>결제 상태 *</b><select name="payStatus" className="w-full p-2 border rounded-lg mt-1"><option>유료</option><option>무료</option><option>일시중지</option><option>해지</option></select></label>
+                                    <label className="col-span-2 mt-2"><b>기타 (추가 정보)</b><textarea name="etcInfo" className="w-full p-2 border rounded-lg mt-1 h-16" placeholder="특이사항 등 자유롭게 입력"></textarea></label>
+                                </div>
+                                <div className="flex gap-2 justify-end mt-6">
+                                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2 border rounded-xl bg-gray-100 font-bold text-xs">취소</button>
+                                    <button type="submit" className="px-6 py-2 bg-[#0B5E4D] text-white rounded-xl font-bold text-xs">등록 완료</button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    {/* 소독증명서 출력 서식 (직위란에 출동대원 표시 복구) */}
                     {isCertOpen && selectedItem && certEntry && (
                         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:bg-white print:p-0">
                             <div className="bg-white rounded-3xl p-8 max-w-3xl w-full max-h-[96vh] overflow-y-auto my-auto shadow-2xl print:shadow-none print:w-full print:h-auto print:max-h-none print:overflow-visible">
@@ -690,13 +711,16 @@
                                             </tr>
                                             <tr>
                                                 <td className="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" colSpan="2">관리(운영)자 확인</td>
+                                                
+                                                {/* 💡 현장 편의를 위해 '출동대원(author)'이 자동으로 기입되도록 복구했습니다! */}
                                                 <td className="border border-black p-4 text-[14px]" colSpan="3">
                                                     <div className="flex justify-between pr-8">
-                                                        <span>직위 : {selectedItem.clientTitle || "대표"}</span>
-                                                        <span>성명 : {selectedItem.clientName || ""}</span>
+                                                        <span>직위 : 담당자</span>
+                                                        <span>성명 : {certEntry.author || "이원식"}</span>
                                                         <span className="text-gray-400">(서명 또는 인)</span>
                                                     </div>
                                                 </td>
+
                                             </tr>
                                             <tr>
                                                 <td className="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" colSpan="2">소독기간</td>
