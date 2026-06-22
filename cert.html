@@ -29,7 +29,7 @@
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyJUCIKiumzq3QbFjZzSQq6mKWdw03AXCja8oH2mClGwUN6cv8CKJehdJLlkNHACqEY/exec";
         const CERT_ISSUER = { name: "주)모바일솔루션즈", address: "부산 강서구 명지국제2로28번길 24, 620호", reps: "구승재, 구태원" };
         
-        // 💡 나중에 사장님 실제 직인 이미지 URL을 여기에 넣으시면 됩니다.
+        // 💡 실제 법인 인감 도장 이미지 주소
         const COMPANY_SEAL_URL = "https://mstcare0-creator.github.io/mstc-crm/seal.png"; 
 
         function App() {
@@ -37,13 +37,14 @@
             const [clientData, setClientData] = useState(null);
             const [error, setError] = useState("");
             const [loading, setLoading] = useState(false);
-            const [certNumber, setCertNumber] = useState(""); // 💡 자동 생성 증명서 번호
+            const [certNumber, setCertNumber] = useState(""); 
+            const [sealImgFailed, setSealImgFailed] = useState(false); 
 
             const searchCert = (e) => {
                 e.preventDefault();
                 if(!bizNum) return;
                 
-                setLoading(true); setError(""); setClientData(null);
+                setLoading(true); setError(""); setClientData(null); setSealImgFailed(false);
                 
                 fetch(GOOGLE_SCRIPT_URL)
                     .then(res => res.json())
@@ -59,10 +60,9 @@
                             if(latestHistory) {
                                 setClientData({ ...found, latestHistory });
                                 
-                                // 💡 증명서 고유 번호 자동 생성 로직 (예: 제 26-06-1832 호)
                                 const yy = latestHistory.date.split('-')[0].slice(2);
                                 const mm = latestHistory.date.split('-')[1];
-                                const randomDigits = Math.floor(Math.random() * 9000 + 1000); // 1000 ~ 9999
+                                const randomDigits = Math.floor(Math.random() * 9000 + 1000); 
                                 setCertNumber(`제 ${yy}-${mm}-${randomDigits} 호`);
                                 
                             } else {
@@ -86,6 +86,7 @@
                         <p className="text-sm text-gray-500 font-medium">MSTC방역 고객사 전용 발급 포털</p>
                     </div>
 
+                    {/* 🔍 검색 폼 */}
                     {!clientData && (
                         <form onSubmit={searchCert} className="max-w-md mx-auto flex flex-col gap-4">
                             <input 
@@ -103,6 +104,7 @@
                         </form>
                     )}
 
+                    {/* 📄 증명서 결과창 */}
                     {clientData && (
                         <div className="animate-fade-in mt-2">
                             <div className="flex justify-end mb-6 print:hidden gap-2">
@@ -162,12 +164,18 @@
                                     <p className="flex justify-between"><span><b>소독 실시자 상호(명칭)</b></span> <span className="font-bold text-right text-[13px] md:text-[14px]">{CERT_ISSUER.name}</span></p>
                                     <p className="flex justify-between"><span><b>소재지</b></span> <span className="text-right text-gray-700 text-[12px] md:text-[13px]">{CERT_ISSUER.address}</span></p>
                                     <p className="flex justify-between relative">
-                                        <span><b>성명(대표자)</b></span> <span className="font-bold text-right mr-16 text-[13px] md:text-[14px]">{CERT_ISSUER.reps}</span>
-                                        <span className="absolute right-0 top-[-10px]">
-                                            {COMPANY_SEAL_URL ? (
-                                                <img src={COMPANY_SEAL_URL} alt="직인" className="w-14 h-14 object-contain rounded-full" />
+                                        <span><b>성명(대표자)</b></span> <span className="font-bold text-right mr-24 text-[13px] md:text-[14px]">{CERT_ISSUER.reps}</span>
+                                        {/* 💡 도장 레이아웃 크기 고도화 (w-24 h-24 크기로 큼직하게 정렬) */}
+                                        <span className="absolute right-4 top-[-30px]">
+                                            {COMPANY_SEAL_URL && !sealImgFailed ? (
+                                                <img 
+                                                    src={COMPANY_SEAL_URL} 
+                                                    alt="직인" 
+                                                    className="w-24 h-24 object-contain" 
+                                                    onError={() => setSealImgFailed(true)} 
+                                                />
                                             ) : (
-                                                <span className="text-red-600 font-bold border-2 border-red-600 rounded-full w-10 h-10 flex items-center justify-center text-[8px] transform rotate-[-6deg] bg-white/40">법인인장</span>
+                                                <span className="text-red-600 font-bold border-2 border-red-600 rounded-full w-20 h-20 flex items-center justify-center text-[13px] transform rotate-[-6deg] bg-white/40">법인인장</span>
                                             )}
                                         </span>
                                     </p>
