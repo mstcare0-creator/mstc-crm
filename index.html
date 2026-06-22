@@ -86,10 +86,7 @@
             
             const [selectedItem, setSelectedItem] = useState(null);
             
-            // 💡 [신규] 우측 상세창 내부 탭 제어 상태 ("info" | "payment" | "history")
             const [detailTab, setDetailTab] = useState("info");
-            
-            // 💡 [신규] 연도 필터 상태
             const [historyYearFilter, setHistoryYearFilter] = useState("all");
             const [paymentYearFilter, setPaymentYearFilter] = useState("all");
 
@@ -129,13 +126,12 @@
             const [certNumber, setCertNumber] = useState("");
             const [sealImgFailed, setSealImgFailed] = useState(false); 
 
-            // 리스트 렌더링 시 우측 창 열기 함수 오버라이드
             const handleSelectItem = (item) => {
                 setSelectedItem(item);
                 setIsEditing(false);
                 setShowHistoryForm(false);
                 setShowPayForm(false);
-                setDetailTab("info"); // 새 항목 누르면 무조건 기본 정보 탭으로
+                setDetailTab("info"); 
                 setHistoryYearFilter("all");
                 setPaymentYearFilter("all");
             };
@@ -335,7 +331,6 @@
 
             if (loading) return <div className="flex items-center justify-center min-h-screen font-bold text-emerald-800">데이터 로드 중... 잠시만 기다려주세요!</div>;
 
-            // 💡 [연도 필터링을 위한 데이터 가공]
             const availableHistoryYears = selectedItem && selectedItem.history ? [...new Set(selectedItem.history.map(h => h.date ? h.date.split('-')[0] : ''))].filter(Boolean).sort().reverse() : [];
             const filteredHistory = selectedItem && selectedItem.history ? selectedItem.history.filter(h => historyYearFilter === 'all' || (h.date && h.date.startsWith(historyYearFilter))) : [];
 
@@ -399,7 +394,6 @@
                         </div>
 
                         <div className="flex flex-col lg:flex-row gap-6">
-                            {/* 왼쪽 리스트 보드 */}
                             <div className="flex-1 bg-white p-6 rounded-3xl border shadow-sm h-fit">
                                 <div className="flex gap-2 p-1 bg-gray-50 border rounded-xl mb-4 overflow-x-auto">
                                     <button onClick={() => { setCurrentTab("active"); setSelectedItem(null); }} className={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'active' ? 'bg-white text-emerald-800 shadow-sm border' : 'text-gray-500'}`}>방역 거래처 ({enrichedData.filter(d=>d.tab==='active').length})</button>
@@ -437,7 +431,7 @@
                                 </div>
                             </div>
 
-                            {/* 🔎 우측 상세창 (탭 구조 완벽 적용) */}
+                            {/* 우측 상세창 */}
                             {selectedItem && (
                                 <div className="w-full lg:w-[440px] bg-white h-fit shadow-2xl rounded-3xl border flex flex-col z-20 animate-slide-in overflow-hidden">
                                     <div className="p-5 border-b flex justify-between items-center bg-gray-50 rounded-t-3xl">
@@ -450,7 +444,6 @@
                                         </div>
                                     </div>
                                     
-                                    {/* 💡 [신규] 상세창 내부 탭 컨트롤 */}
                                     <div className="flex border-b bg-white text-xs font-bold">
                                         <button onClick={() => { setDetailTab("info"); setIsEditing(false); setShowHistoryForm(false); setShowPayForm(false); }} className={`flex-1 py-3 transition-all ${detailTab === 'info' ? 'border-b-2 border-[#0B5E4D] text-[#0B5E4D]' : 'text-gray-400 hover:bg-gray-50'}`}>📋 정보</button>
                                         <button onClick={() => { setDetailTab("payment"); setIsEditing(false); setShowHistoryForm(false); setShowPayForm(false); }} className={`flex-1 py-3 transition-all ${detailTab === 'payment' ? 'border-b-2 border-amber-600 text-amber-700' : 'text-gray-400 hover:bg-gray-50'}`}>💰 수금 내역</button>
@@ -472,8 +465,11 @@
                                                         <div className="grid grid-cols-2 gap-3 text-xs">
                                                             <label className="col-span-2">상호명 <input value={editForm.name || ""} onChange={e=>setEditForm({...editForm, name: e.target.value})} className="border p-2 w-full rounded outline-none" required /></label>
                                                             <label className="col-span-2">사업자등록번호 <input value={editForm.bizNumber || ""} onChange={e=>setEditForm({...editForm, bizNumber: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="고객 증명서 조회용 (숫자만 입력)" /></label>
-                                                            <label>고객 직위 <select value={editForm.clientTitle || "대표"} onChange={e=>setEditForm({...editForm, clientTitle: e.target.value})} className="border p-2 w-full rounded outline-none"><option>대표</option><option>점장</option><option>원장</option><option>소장</option><option>매니저</option></select></label>
-                                                            <label>고객 성명 <input value={editForm.clientName || ""} onChange={e=>setEditForm({...editForm, clientName: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="미입력 시 빈칸 출력" /></label>
+                                                            
+                                                            {/* 💡 수정 폼의 성명 칸 플레이스홀더 변경 */}
+                                                            <label>서명자 직위 <select value={editForm.clientTitle || "대표"} onChange={e=>setEditForm({...editForm, clientTitle: e.target.value})} className="border p-2 w-full rounded outline-none"><option>대표</option><option>점장</option><option>원장</option><option>소장</option><option>매니저</option></select></label>
+                                                            <label>서명자 성명 <input value={editForm.clientName || ""} onChange={e=>setEditForm({...editForm, clientName: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="미입력 시 출동대원 기입" /></label>
+                                                            
                                                             <label>담당 대원 <select value={editForm.manager || ""} onChange={e=>setEditForm({...editForm, manager: e.target.value})} className="border p-2 w-full rounded outline-none">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
                                                             <label>평수 <input value={editForm.area || ""} onChange={e=>setEditForm({...editForm, area: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
                                                             <label className="col-span-2 flex gap-2">
@@ -503,7 +499,7 @@
                                                 ) : (
                                                     <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-xs">
                                                         <div className="col-span-2 border-b pb-2 mb-2"><p className="text-gray-400">사업자등록번호</p><p className="font-mono font-bold text-gray-800 mt-1">{selectedItem.bizNumber || "미등록"}</p></div>
-                                                        <div><p className="text-gray-400">고객 직위/성명</p><p className="font-bold text-blue-800 mt-1">{selectedItem.clientTitle || "대표"} {selectedItem.clientName || ""}</p></div>
+                                                        <div><p className="text-gray-400">서명자 직위/성명</p><p className="font-bold text-blue-800 mt-1">{selectedItem.clientTitle || "대표"} {selectedItem.clientName || "(출동대원 자동출력)"}</p></div>
                                                         <div><p className="text-gray-400">담당 대원</p><p className="font-bold mt-1">{selectedItem.manager}</p></div>
                                                         <div className="col-span-2"><p className="text-gray-400">연락처 / 주소</p><p className="font-bold mt-1">{selectedItem.phone} <br/><span className="font-normal text-gray-600">{selectedItem.gu} {selectedItem.dong} {selectedItem.address}</span></p></div>
                                                         <div className="col-span-2 border-t pt-3 mt-1 grid grid-cols-2 gap-4">
@@ -556,7 +552,6 @@
                                                     </form>
                                                 )}
 
-                                                {/* 💡 [연도 필터] 수금 기록 */}
                                                 <div className="flex justify-between items-center bg-gray-50 p-2 rounded-xl border border-gray-100 mt-4">
                                                     <span className="text-xs font-bold text-gray-500 pl-2">전체 {selectedItem.paymentHistory ? selectedItem.paymentHistory.length : 0}건</span>
                                                     <select value={paymentYearFilter} onChange={e => setPaymentYearFilter(e.target.value)} className="text-xs p-1.5 border rounded-lg outline-none font-bold text-gray-700">
@@ -710,7 +705,6 @@
                                                     </form>
                                                 )}
 
-                                                {/* 💡 [연도 필터] 방역 기록 */}
                                                 <div className="flex justify-between items-center bg-gray-50 p-2 rounded-xl border border-gray-100 mt-4">
                                                     <span className="text-xs font-bold text-gray-500 pl-2">전체 {selectedItem.history ? selectedItem.history.length : 0}건</span>
                                                     <select value={historyYearFilter} onChange={e => setHistoryYearFilter(e.target.value)} className="text-xs p-1.5 border rounded-lg outline-none font-bold text-gray-700">
@@ -756,7 +750,46 @@
                         </div>
                     </div>
 
-                    {/* 소독증명서 출력 모달 */}
+                    {/* 신규 등록 모달 */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                            <form onSubmit={handleRegister} className="bg-white rounded-3xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+                                <h3 className="text-lg font-bold mb-4 border-b pb-2">신규 업체 등록</h3>
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <label className="col-span-2"><b>등록 탭 구분 *</b>
+                                        <select name="tab" defaultValue={currentTab === "prospect" ? "prospect" : "active"} className="w-full p-2 border rounded-lg mt-1 bg-gray-50"><option value="active">방역 거래처 (운영)</option><option value="prospect">영업처 (대기)</option></select>
+                                    </label>
+                                    <label className="col-span-2"><b>상호명 *</b><input name="name" required className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label className="col-span-2"><b>사업자등록번호 (선택)</b><input name="bizNumber" className="w-full p-2 border rounded-lg mt-1" placeholder="고객 증명서 조회용 (숫자만 입력)" /></label>
+                                    
+                                    <label><b>서명자 직위 *</b><select name="clientTitle" className="w-full p-2 border rounded-lg mt-1"><option>대표</option><option>점장</option><option>원장</option><option>소장</option><option>매니저</option></select></label>
+                                    <label><b>서명자 성명 (선택)</b><input name="clientName" className="w-full p-2 border rounded-lg mt-1" placeholder="미입력 시 출동대원 표시" /></label>
+
+                                    <label><b>담당 대원 *</b><select name="manager" className="w-full p-2 border rounded-lg mt-1">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
+                                    <label><b>연락처 *</b><input name="phone" required className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label className="col-span-2 flex gap-2">
+                                        <div className="flex-1"><b>시/도 *</b><select name="gu" value={regCity} onChange={e=>setRegCity(e.target.value)} className="border p-2 w-full rounded-lg mt-1 bg-white">{Object.keys(REGIONS).map(r=><option key={r} value={r}>{r}</option>)}</select></div>
+                                        <div className="flex-1"><b>구/군 *</b><select name="dong" className="border p-2 w-full rounded-lg mt-1 bg-white">{REGIONS[regCity].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
+                                    </label>
+                                    <label className="col-span-2"><b>상세주소 *</b><input name="address" required className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label className="col-span-2 text-emerald-800 font-bold border-t pt-2 mt-2">필수 관리 항목</label>
+                                    <label><b>방역시작일 *</b><input type="date" name="contractStart" defaultValue={TODAY} required className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>평수 (면적) *</b><input name="area" defaultValue="30" className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>계약 금액 *</b><input type="number" name="fee" defaultValue="30000" className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    <label><b>방역 주기 *</b><select name="cycle" className="w-full p-2 border rounded-lg mt-1">{CYCLES.map(c=><option key={c}>{c}</option>)}</select></label>
+                                    <label><b>방역 구분 *</b><select name="serviceType" className="w-full p-2 border rounded-lg mt-1"><option>정기</option><option>분기</option><option>무료</option></select></label>
+                                    <label><b>결제 상태 *</b><select name="payStatus" className="w-full p-2 border rounded-lg mt-1"><option>유료</option><option>무료</option><option>일시중지</option><option>해지</option></select></label>
+                                    <label className="col-span-2 mt-2"><b>기타 (추가 정보)</b><textarea name="etcInfo" className="w-full p-2 border rounded-lg mt-1 h-16" placeholder="특이사항 등 자유롭게 입력"></textarea></label>
+                                </div>
+                                <div className="flex gap-2 justify-end mt-6">
+                                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2 border rounded-xl bg-gray-100 font-bold text-xs">취소</button>
+                                    <button type="submit" className="px-6 py-2 bg-[#0B5E4D] text-white rounded-xl font-bold text-xs">등록 완료</button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    {/* 소독증명서 출력 (관리자 화면용) */}
                     {isCertOpen && selectedItem && certEntry && (
                         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:bg-white print:p-0">
                             <div className="bg-white rounded-3xl p-8 max-w-3xl w-full max-h-[96vh] overflow-y-auto my-auto shadow-2xl print:shadow-none print:w-full print:h-auto print:max-h-none print:overflow-visible">
@@ -781,12 +814,15 @@
                                             </tr>
                                             <tr>
                                                 <td className="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" colSpan="2">관리(운영)자 확인</td>
+                                                
+                                                {/* 💡 [핵심] 고객 직위/성명 출력 (성명이 비어있으면 출동대원 자동 반영) */}
                                                 <td className="border border-black p-4 text-[14px]" colSpan="3">
                                                     <div className="flex justify-between pr-8">
                                                         <span>직위 : {selectedItem.clientTitle || "대표"}</span>
-                                                        <span>성명 : {selectedItem.clientName || ""}</span>
+                                                        <span>성명 : {selectedItem.clientName || certEntry.author || "이원식"}</span>
                                                     </div>
                                                 </td>
+
                                             </tr>
                                             <tr>
                                                 <td className="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" colSpan="2">소독기간</td>
