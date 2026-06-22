@@ -164,18 +164,18 @@
                                     <p className="flex justify-between"><span><b>소독 실시자 상호(명칭)</b></span> <span className="font-bold text-right text-[13px] md:text-[14px]">{CERT_ISSUER.name}</span></p>
                                     <p className="flex justify-between"><span><b>소재지</b></span> <span className="text-right text-gray-700 text-[12px] md:text-[13px]">{CERT_ISSUER.address}</span></p>
                                     <p className="flex justify-between relative">
-                                        <span><b>성명(대표자)</b></span> <span className="font-bold text-right mr-24 text-[13px] md:text-[14px]">{CERT_ISSUER.reps}</span>
-                                        {/* 💡 도장 레이아웃 크기 고도화 (w-24 h-24 크기로 큼직하게 정렬) */}
-                                        <span className="absolute right-4 top-[-30px]">
+                                        <span><b>성명(대표자)</b></span> <span className="font-bold text-right mr-16 text-[13px] md:text-[14px]">{CERT_ISSUER.reps}</span>
+                                        {/* 💡 도장 레이아웃 크기 및 위치 밸런스 조정 완료 */}
+                                        <span className="absolute right-12 top-[-15px]">
                                             {COMPANY_SEAL_URL && !sealImgFailed ? (
                                                 <img 
                                                     src={COMPANY_SEAL_URL} 
                                                     alt="직인" 
-                                                    className="w-24 h-24 object-contain" 
+                                                    className="w-[65px] h-[65px] object-contain" 
                                                     onError={() => setSealImgFailed(true)} 
                                                 />
                                             ) : (
-                                                <span className="text-red-600 font-bold border-2 border-red-600 rounded-full w-20 h-20 flex items-center justify-center text-[13px] transform rotate-[-6deg] bg-white/40">법인인장</span>
+                                                <span className="text-red-600 font-bold border-2 border-red-600 rounded-full w-[65px] h-[65px] flex items-center justify-center text-[11px] transform rotate-[-6deg] bg-white/40">법인인장</span>
                                             )}
                                         </span>
                                     </p>
