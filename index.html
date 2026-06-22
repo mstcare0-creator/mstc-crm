@@ -26,7 +26,6 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
         
-        // 💡 구글 시트 연동 URL
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyJUCIKiumzq3QbFjZzSQq6mKWdw03AXCja8oH2mClGwUN6cv8CKJehdJLlkNHACqEY/exec"; 
 
         const CERT_ISSUER = { name: "주)모바일솔루션즈", address: "부산 강서구 명지국제2로28번길 24, 620호", reps: "구승재, 구태원" };
@@ -41,29 +40,27 @@
             "경남": ["양산시", "김해시"] 
         };
 
-        // 💡 회사 정식 직인 이미지 링크
         const COMPANY_SEAL_URL = "https://mstcare0-creator.github.io/mstc-crm/seal.png"; 
 
         function App() {
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
 
-            // 🛡️ 복잡한 로그인창을 제거하고 페이지 진입 시 실시간 데이터 즉시 호출
             useEffect(() => {
                 fetch(GOOGLE_SCRIPT_URL)
                     .then(res => res.json())
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
                             setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v16", JSON.stringify(fetchedData));
+                            localStorage.setItem("mstc_crm_data_v18", JSON.stringify(fetchedData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v16");
+                            const local = localStorage.getItem("mstc_crm_data_v18");
                             if(local) setData(JSON.parse(local));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v16");
+                        const local = localStorage.getItem("mstc_crm_data_v18");
                         if(local) setData(JSON.parse(local));
                         setLoading(false);
                     });
@@ -71,7 +68,7 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v16", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v18", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
@@ -95,24 +92,49 @@
 
             const [showHistoryForm, setShowHistoryForm] = useState(false);
             const [historyForm, setHistoryForm] = useState({ date: TODAY, type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: "이원식" });
+            const [editingHistoryId, setEditingHistoryId] = useState(null);
+
             const [showPayForm, setShowPayForm] = useState(false);
             const [payForm, setPayForm] = useState({ month: CURRENT_MONTH, amount: "30000", status: "수금완료", note: "" });
 
-            const [customChemInput, setCustomChemInput] = useState({ "살균": "", "살충": "" });
-            const [customChemsList, setCustomChemsList] = useState(() => {
-                const savedChems = localStorage.getItem("mstc_custom_chems_v1");
-                return savedChems ? JSON.parse(savedChems) : { "살균": [], "살충": [] };
+            const [customMethodInput, setCustomMethodInput] = useState("");
+            const [customMethodsList, setCustomMethodsList] = useState(() => {
+                const saved = localStorage.getItem("mstc_custom_methods_v1");
+                return saved ? JSON.parse(saved) : [];
             });
-            useEffect(() => { localStorage.setItem("mstc_custom_chems_v1", JSON.stringify(customChemsList)); }, [customChemsList]);
+            useEffect(() => { localStorage.setItem("mstc_custom_methods_v1", JSON.stringify(customMethodsList)); }, [customMethodsList]);
+
+            const [customChemInput, setCustomChemInput] = useState({ "살균": "", "살충": "", "기타": "" });
+            const [customChemsList, setCustomChemsList] = useState(() => {
+                const savedChems = localStorage.getItem("mstc_custom_chems_v2");
+                if (savedChems) {
+                    const parsed = JSON.parse(savedChems);
+                    if (!parsed["기타"]) parsed["기타"] = [];
+                    return parsed;
+                }
+                return { "살균": [], "살충": [], "기타": [] };
+            });
+            useEffect(() => { localStorage.setItem("mstc_custom_chems_v2", JSON.stringify(customChemsList)); }, [customChemsList]);
 
             const [isCertOpen, setIsCertOpen] = useState(false);
             const [certEntry, setCertEntry] = useState(null);
             const [certNumber, setCertNumber] = useState("");
 
+            const handleAddCustomMethod = () => {
+                const val = customMethodInput.trim();
+                if (val && !["살균", "살충"].includes(val) && !customMethodsList.includes(val)) setCustomMethodsList([...customMethodsList, val]);
+                setCustomMethodInput("");
+            };
+            const handleDeleteCustomMethod = (methodToRemove) => {
+                if(!confirm(`삭제하시겠습니까?`)) return;
+                setCustomMethodsList(prev => prev.filter(m => m !== methodToRemove));
+                setHistoryForm(prev => ({...prev, methods: prev.methods.filter(m => m !== methodToRemove)}));
+            };
+
             const handleAddCustomChem = (type) => {
                 const val = customChemInput[type].trim();
                 if (val) {
-                    if (!customChemsList[type].includes(val) && !CHEMICALS_BY_TYPE[type].includes(val)) setCustomChemsList(prev => ({...prev, [type]: [...prev[type], val]}));
+                    if (!customChemsList[type].includes(val) && !(CHEMICALS_BY_TYPE[type] || []).includes(val)) setCustomChemsList(prev => ({...prev, [type]: [...prev[type], val]}));
                     if (!historyForm.chemicals.includes(val)) setHistoryForm(prev => ({...prev, chemicals: [...prev.chemicals, val]}));
                     setCustomChemInput(prev => ({...prev, [type]: ""}));
                 }
@@ -135,6 +157,8 @@
                     id: "AC" + Date.now(), tab: regTab,
                     name: fd.get("name"), manager: fd.get("manager"), phone: fd.get("phone"),
                     bizNumber: fd.get("bizNumber") || "", 
+                    clientTitle: fd.get("clientTitle") || "대표", // 💡 고객 직위 추가
+                    clientName: fd.get("clientName") || "",     // 💡 고객 성명 추가
                     gu: fd.get("gu"), dong: fd.get("dong"), address: fd.get("address"), area: fd.get("area"),
                     contractStart: fd.get("contractStart"), serviceType: fd.get("serviceType"), payStatus: payStat,
                     cycle: fd.get("cycle"), fee: fd.get("fee"), etcInfo: fd.get("etcInfo") || "",
@@ -169,13 +193,28 @@
 
             const handleAddHistory = (e) => {
                 e.preventDefault();
-                const newLog = { id: Date.now(), date: historyForm.date, type: historyForm.type, author: historyForm.author, content: historyForm.type === "방역" ? "정기 방역 완료" : historyForm.note, methods: historyForm.type === "방역" ? historyForm.methods : [], chemicals: historyForm.type === "방역" ? historyForm.chemicals : [] };
-                const updatedItem = { ...selectedItem, history: [newLog, ...(selectedItem.history || [])] };
+                const contentStr = historyForm.type === "방역" ? "정기 방역 완료" : historyForm.note;
+                let updatedHistoryList;
+                if (editingHistoryId) {
+                    updatedHistoryList = selectedItem.history.map(h => 
+                        h.id === editingHistoryId ? { ...h, date: historyForm.date, type: historyForm.type, author: historyForm.author, content: contentStr, methods: historyForm.type === "방역" ? historyForm.methods : [], chemicals: historyForm.type === "방역" ? historyForm.chemicals : [] } : h
+                    );
+                } else {
+                    const newLog = { id: Date.now(), date: historyForm.date, type: historyForm.type, author: historyForm.author, content: contentStr, methods: historyForm.type === "방역" ? historyForm.methods : [], chemicals: historyForm.type === "방역" ? historyForm.chemicals : [] };
+                    updatedHistoryList = [newLog, ...(selectedItem.history || [])];
+                }
+                const updatedItem = { ...selectedItem, history: updatedHistoryList };
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item));
-                setSelectedItem(updatedItem); setShowHistoryForm(false);
+                setSelectedItem(updatedItem); setShowHistoryForm(false); setEditingHistoryId(null);
             };
+
+            const handleEditHistoryInit = (h) => {
+                setHistoryForm({ date: h.date, type: h.type, author: h.author || "이원식", methods: h.methods || [], chemicals: h.chemicals || [], note: h.type === "방역" ? "" : h.content });
+                setEditingHistoryId(h.id); setShowHistoryForm(true); setShowPayForm(false); setIsEditing(false);
+            };
+
             const handleDeleteHistory = (logId) => {
-                if(!confirm("삭제하시겠습니까?")) return;
+                if(!confirm("해당 기록을 삭제하시겠습니까?")) return;
                 const updatedItem = { ...selectedItem, history: selectedItem.history.filter(h => h.id !== logId) };
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item)); setSelectedItem(updatedItem);
             };
@@ -239,6 +278,7 @@
             }, [data, chartManager]);
 
             const maxChartVal = Math.max(1, ...chartStats.map(s => Math.max(s.newCount, s.termCount, Math.abs(s.netCount))));
+            const hasCustomMethodSelected = historyForm.methods.some(m => !["살균", "살충"].includes(m));
 
             if (loading) return <div className="flex items-center justify-center min-h-screen font-bold text-emerald-800">데이터 로드 중... 잠시만 기다려주세요!</div>;
 
@@ -255,7 +295,6 @@
                             <div className="text-sm text-gray-400 font-mono font-bold tracking-wider">{TODAY.replace(/-/g, '.')} 기준</div>
                         </div>
 
-                        {/* 대시보드 지표 */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
                                 <div className="p-4 bg-[#E3F2EC] rounded-xl text-[#0B5E4D] text-2xl">👤</div>
@@ -275,7 +314,6 @@
                             </div>
                         </div>
 
-                        {/* 순증 차트 */}
                         <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm relative overflow-hidden">
                             <div className="flex justify-between items-center mb-6">
                                 <div className="flex items-center gap-3">
@@ -292,9 +330,7 @@
                                         <div className="flex items-end gap-1 h-28 w-full justify-center relative">
                                             <div className="bg-[#0B5E4D] rounded-t-sm shadow-sm transition-all duration-500 w-3.5" style={{ height: `${(chart.newCount / maxChartVal) * 100}%`, minHeight: chart.newCount > 0 ? '4px' : '0' }}></div>
                                             <div className="bg-rose-700 rounded-t-sm shadow-sm transition-all duration-500 w-3.5" style={{ height: `${(chart.termCount / maxChartVal) * 100}%`, minHeight: chart.termCount > 0 ? '4px' : '0' }}></div>
-                                            <div className="absolute -top-10 bg-gray-800 text-white text-[11px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20 shadow-lg font-bold">
-                                                순증 {chart.netCount > 0 ? `+${chart.netCount}` : chart.netCount}건
-                                            </div>
+                                            <div className="absolute -top-10 bg-gray-800 text-white text-[11px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20 shadow-lg font-bold">순증 {chart.netCount > 0 ? `+${chart.netCount}` : chart.netCount}건</div>
                                         </div>
                                         <span className="text-[10px] text-gray-400 font-bold">{chart.label}</span>
                                     </div>
@@ -302,7 +338,6 @@
                             </div>
                         </div>
 
-                        {/* 메인 리스트 보드 */}
                         <div className="flex flex-col lg:flex-row gap-6">
                             <div className="flex-1 bg-white p-6 rounded-3xl border shadow-sm h-fit">
                                 <div className="flex gap-2 p-1 bg-gray-50 border rounded-xl mb-4 overflow-x-auto">
@@ -364,8 +399,13 @@
                                                 <h4 className="font-bold text-sm border-b pb-2 mb-2">✏️ 업체 정보 수정</h4>
                                                 <div className="grid grid-cols-2 gap-3 text-xs">
                                                     <label className="col-span-2">상호명 <input value={editForm.name || ""} onChange={e=>setEditForm({...editForm, name: e.target.value})} className="border p-2 w-full rounded outline-none" required /></label>
-                                                    <label className="col-span-2"><b>사업자등록번호 (숫자만입력)</b><input value={editForm.bizNumber || ""} onChange={e=>setEditForm({...editForm, bizNumber: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="예: 1234567890" /></label>
-                                                    <label>담당자 <select value={editForm.manager || ""} onChange={e=>setEditForm({...editForm, manager: e.target.value})} className="border p-2 w-full rounded outline-none">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
+                                                    <label className="col-span-2">사업자등록번호 <input value={editForm.bizNumber || ""} onChange={e=>setEditForm({...editForm, bizNumber: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="고객 증명서 조회용 (숫자만 입력)" /></label>
+                                                    
+                                                    {/* 💡 고객사 직위 및 성명 필드 (수정 폼) */}
+                                                    <label>고객 직위 <select value={editForm.clientTitle || "대표"} onChange={e=>setEditForm({...editForm, clientTitle: e.target.value})} className="border p-2 w-full rounded outline-none"><option>대표</option><option>점장</option><option>원장</option><option>소장</option><option>매니저</option></select></label>
+                                                    <label>고객 성명 <input value={editForm.clientName || ""} onChange={e=>setEditForm({...editForm, clientName: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="미입력 시 빈칸 출력" /></label>
+                                                    
+                                                    <label>담당 대원 <select value={editForm.manager || ""} onChange={e=>setEditForm({...editForm, manager: e.target.value})} className="border p-2 w-full rounded outline-none">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
                                                     <label>평수 <input value={editForm.area || ""} onChange={e=>setEditForm({...editForm, area: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
                                                     <label className="col-span-2 flex gap-2">
                                                         <div className="flex-1">시/도 <select value={editForm.gu || "부산"} onChange={e=>setEditForm({...editForm, gu: e.target.value, dong: REGIONS[e.target.value][0]})} className="border p-2 w-full rounded-lg mt-1 bg-white">{Object.keys(REGIONS).map(r=><option key={r}>{r}</option>)}</select></div>
@@ -394,9 +434,12 @@
                                         ) : (
                                             <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-xs">
                                                 <div className="col-span-2 border-b pb-2 mb-2"><p className="text-gray-400">사업자등록번호</p><p className="font-mono font-bold text-gray-800 mt-1">{selectedItem.bizNumber || "미등록"}</p></div>
-                                                <div><p className="text-gray-400">담당자</p><p className="font-bold mt-1">{selectedItem.manager}</p></div>
-                                                <div><p className="text-gray-400">연락처</p><p className="font-mono font-bold mt-1">{selectedItem.phone}</p></div>
-                                                <div className="col-span-2"><p className="text-gray-400">주소</p><p className="font-bold mt-1">{selectedItem.gu} {selectedItem.dong} {selectedItem.address}</p></div>
+                                                
+                                                {/* 💡 고객사 정보 표시 영역 */}
+                                                <div><p className="text-gray-400">고객 직위/성명</p><p className="font-bold text-blue-800 mt-1">{selectedItem.clientTitle || "대표"} {selectedItem.clientName || ""}</p></div>
+                                                <div><p className="text-gray-400">담당 대원</p><p className="font-bold mt-1">{selectedItem.manager}</p></div>
+                                                
+                                                <div className="col-span-2"><p className="text-gray-400">연락처 / 주소</p><p className="font-bold mt-1">{selectedItem.phone} <br/><span className="font-normal text-gray-600">{selectedItem.gu} {selectedItem.dong} {selectedItem.address}</span></p></div>
                                                 
                                                 <div className="col-span-2 border-t pt-3 mt-1 grid grid-cols-2 gap-4">
                                                     <div><p className="text-gray-400">방역시작일</p><p className="font-mono font-bold text-[#0B5E4D] mt-1">{selectedItem.contractStart || "미기입"}</p></div>
@@ -422,13 +465,16 @@
 
                                         {!isEditing && (
                                             <div className="flex gap-2">
-                                                <button onClick={() => {setShowHistoryForm(!showHistoryForm); setShowPayForm(false);}} className="flex-1 bg-emerald-50 text-emerald-800 font-bold text-xs py-2.5 rounded-xl border border-emerald-200">+ 방역 추가</button>
+                                                <button onClick={() => {
+                                                    setHistoryForm({ date: TODAY, type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: "이원식" });
+                                                    setEditingHistoryId(null);
+                                                    setShowHistoryForm(!showHistoryForm); setShowPayForm(false);
+                                                }} className="flex-1 bg-emerald-50 text-emerald-800 font-bold text-xs py-2.5 rounded-xl border border-emerald-200">+ 방역 추가</button>
                                                 <button onClick={() => {setShowPayForm(!showPayForm); setShowHistoryForm(false);}} className="flex-1 bg-amber-50 text-amber-800 font-bold text-xs py-2.5 rounded-xl border border-amber-200">+ 수금 추가</button>
-                                                <button onClick={() => { setEditForm(selectedItem); setIsEditing(true); setShowHistoryForm(false); setShowPayForm(false); }} className="flex-1 bg-gray-100 text-gray-700 text-xs py-2.5 rounded-xl border font-bold">✏️ 수정</button>
+                                                <button onClick={() => { setEditForm(selectedItem); setIsEditing(true); setShowHistoryForm(false); setShowPayForm(false); }} className="flex-1 bg-gray-100 text-gray-700 text-xs py-2.5 rounded-xl border font-bold">✏️ 업체 수정</button>
                                             </div>
                                         )}
 
-                                        {/* 💰 수금 추가 폼 */}
                                         {showPayForm && !isEditing && (
                                             <form onSubmit={handleAddPayment} className="border p-4 rounded-2xl bg-amber-50/30 shadow-sm space-y-4 text-xs animate-fade-in">
                                                 <p className="font-bold text-amber-900 border-b border-amber-200 pb-2">💰 월별 수금 기록 추가</p>
@@ -445,32 +491,44 @@
                                             </form>
                                         )}
 
-                                        {/* 📝 방역기록 추가 폼 */}
                                         {showHistoryForm && !isEditing && (
-                                            <form onSubmit={handleAddHistory} className="border p-4 rounded-2xl bg-white shadow-sm space-y-4 text-xs animate-fade-in">
-                                                <p className="font-bold text-gray-700 border-b pb-2">📝 현장 방역 기록 추가</p>
+                                            <form onSubmit={handleAddHistory} className={`border p-4 rounded-2xl shadow-sm space-y-4 text-xs animate-fade-in ${editingHistoryId ? 'bg-blue-50/30 border-blue-200' : 'bg-white'}`}>
+                                                <p className={`font-bold border-b pb-2 ${editingHistoryId ? 'text-blue-800 border-blue-200' : 'text-gray-700'}`}>
+                                                    {editingHistoryId ? "✏️ 현장 방역 기록 수정" : "📝 현장 방역 기록 추가"}
+                                                </p>
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <label className="block"><b>방역 일자</b><input type="date" value={historyForm.date} onChange={e => setHistoryForm({...historyForm, date: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" /></label>
                                                     <label className="block"><b>출동대원</b><select value={historyForm.author} onChange={e => setHistoryForm({...historyForm, author: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none">{STAFF.map(s => <option key={s}>{s}</option>)}</select></label>
                                                 </div>
+                                                
                                                 <div>
-                                                    <p className="font-semibold mb-1 text-gray-600">처리 종류 (복수 선택)</p>
-                                                    <div className="flex gap-2">
-                                                        {["살균", "살충"].map(m => {
+                                                    <p className="font-semibold mb-2 text-gray-600">처리 종류 선택 및 추가 (복수 선택)</p>
+                                                    <div className="flex flex-wrap gap-2 mb-3">
+                                                        {["살균", "살충", ...customMethodsList].map(m => {
                                                             const isSel = historyForm.methods.includes(m);
-                                                            return <button type="button" key={m} onClick={() => {
-                                                                const nMeth = isSel ? historyForm.methods.filter(x => x !== m) : [...historyForm.methods, m];
-                                                                let nChem = historyForm.chemicals;
-                                                                if (isSel) {
-                                                                    const tabChems = [...CHEMICALS_BY_TYPE[m], ...customChemsList[m]];
-                                                                    nChem = nChem.filter(c => !tabChems.includes(c));
-                                                                }
-                                                                setHistoryForm({...historyForm, methods: nMeth, chemicals: nChem});
-                                                            }} className={`flex-1 py-2 rounded-lg border text-xs font-bold transition-all ${isSel ? 'bg-[#0B5E4D] text-white border-[#0B5E4D]' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>{m}</button>
+                                                            const isCustom = !["살균", "살충"].includes(m);
+                                                            return (
+                                                                <div key={m} className={`flex items-center rounded-lg border transition-all overflow-hidden ${isSel ? 'bg-[#0B5E4D] text-white font-bold' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
+                                                                    <button type="button" onClick={() => {
+                                                                        const nMeth = isSel ? historyForm.methods.filter(x => x !== m) : [...historyForm.methods, m];
+                                                                        let nChem = historyForm.chemicals;
+                                                                        if (isSel) {
+                                                                            const tabChems = isCustom ? customChemsList["기타"] : [...(CHEMICALS_BY_TYPE[m] || []), ...customChemsList[m]];
+                                                                            nChem = nChem.filter(c => !tabChems.includes(c));
+                                                                        }
+                                                                        setHistoryForm({...historyForm, methods: nMeth, chemicals: nChem});
+                                                                    }} className="px-4 py-2 text-xs">{m}</button>
+                                                                    {isCustom && <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteCustomMethod(m); }} className={`px-2 py-2 text-[10px] border-l hover:bg-red-500 hover:text-white transition-all ${isSel ? 'border-[#084b3e] text-emerald-200' : 'border-gray-200 text-gray-400'}`}>✕</button>}
+                                                                </div>
+                                                            );
                                                         })}
                                                     </div>
+                                                    <div className="flex gap-1.5 bg-gray-50 p-2 rounded-xl border border-gray-100">
+                                                        <input type="text" value={customMethodInput} onChange={e => setCustomMethodInput(e.target.value)} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomMethod(); }}} placeholder="기타 처리 종류 직접 입력 (예: 구서, 포충기)" className="flex-1 p-2 border rounded-lg text-xs outline-none bg-white shadow-sm" />
+                                                        <button type="button" onClick={handleAddCustomMethod} className="px-3 py-1.5 bg-gray-600 text-white rounded-lg text-xs font-bold shadow-sm hover:opacity-90">종류 추가</button>
+                                                    </div>
                                                 </div>
-                                                {/* 살균 약품 */}
+
                                                 {historyForm.methods.includes("살균") && (
                                                     <div className="p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl">
                                                         <p className="font-bold text-emerald-800 mb-2">🦠 살균 약품 선택 및 직접 입력</p>
@@ -495,7 +553,6 @@
                                                         </div>
                                                     </div>
                                                 )}
-                                                {/* 살충 약품 */}
                                                 {historyForm.methods.includes("살충") && (
                                                     <div className="p-3 bg-amber-50/50 border border-amber-100 rounded-xl">
                                                         <p className="font-bold text-amber-800 mb-2">🪳 살충 약품 선택 및 직접 입력</p>
@@ -515,20 +572,42 @@
                                                             })}
                                                         </div>
                                                         <div className="flex gap-1.5">
-                                                            <input type="text" value={customChemInput["살충"]} onChange => setCustomChemInput({...customChemInput, "살충": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("살충"); }}} placeholder="기타 살충 약품 직접 입력 후 추가 버튼 클릭" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm" />
+                                                            <input type="text" value={customChemInput["살충"]} onChange={e => setCustomChemInput({...customChemInput, "살충": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("살충"); }}} placeholder="기타 살충 약품 직접 입력 후 추가 버튼 클릭" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm" />
                                                             <button type="button" onClick={() => handleAddCustomChem("살충")} className="px-3 py-1.5 bg-amber-700 text-white rounded-lg text-[11px] font-bold shadow-sm hover:opacity-90">추가</button>
                                                         </div>
                                                     </div>
                                                 )}
                                                 
+                                                {hasCustomMethodSelected && (
+                                                    <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl">
+                                                        <p className="font-bold text-blue-800 mb-2">🏷️ 기타 방식 약품 선택 및 직접 입력</p>
+                                                        <div className="flex flex-wrap gap-1.5 mb-3">
+                                                            {customChemsList["기타"].map(c => {
+                                                                const hasChem = historyForm.chemicals.includes(c);
+                                                                return (
+                                                                    <div key={c} className={`flex items-center rounded-lg border transition-all overflow-hidden ${hasChem ? 'bg-blue-600 text-white border-blue-700 font-bold' : 'bg-white text-gray-500 hover:bg-blue-50'}`}>
+                                                                        <button type="button" onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} className="px-2.5 py-1.5 text-[11px] font-medium">{c}</button>
+                                                                        <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteCustomChem("기타", c); }} className={`px-1.5 py-1.5 text-[10px] border-l hover:bg-red-500 hover:text-white transition-all ${hasChem ? 'border-blue-500 text-blue-200' : 'border-gray-200 text-gray-400'}`}>✕</button>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                        <div className="flex gap-1.5">
+                                                            <input type="text" value={customChemInput["기타"]} onChange={e => setCustomChemInput({...customChemInput, "기타": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("기타"); }}} placeholder="기타 방식에 사용된 약품/장비 등 입력" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm" />
+                                                            <button type="button" onClick={() => handleAddCustomChem("기타")} className="px-3 py-1.5 bg-blue-700 text-white rounded-lg text-[11px] font-bold shadow-sm hover:opacity-90">추가</button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
                                                 <div className="flex gap-2 justify-end pt-2">
-                                                    <button type="button" onClick={() => setShowHistoryForm(false)} className="px-4 py-2 border rounded-xl bg-white font-bold">취소</button>
-                                                    <button type="submit" className="px-5 py-2 bg-[#0B5E4D] text-white rounded-xl font-bold">기록 추가</button>
+                                                    <button type="button" onClick={() => {setShowHistoryForm(false); setEditingHistoryId(null);}} className="px-4 py-2 border rounded-xl bg-white font-bold">취소</button>
+                                                    <button type="submit" className={`px-5 py-2 text-white rounded-xl font-bold ${editingHistoryId ? 'bg-blue-600' : 'bg-[#0B5E4D]'}`}>
+                                                        {editingHistoryId ? "수정 사항 저장" : "기록 추가"}
+                                                    </button>
                                                 </div>
                                             </form>
                                         )}
 
-                                        {/* 과거 히스토리 */}
                                         <div className="space-y-3 pt-4 border-t">
                                             <h4 className="text-xs font-bold text-gray-500">📋 가맹점 통합 히스토리 (방역 / 수금)</h4>
                                             
@@ -545,13 +624,17 @@
                                             ))}
 
                                             {(selectedItem.history || []).map((h) => (
-                                                <div key={h.id} className="p-4 bg-gray-50 border rounded-2xl text-xs space-y-1 relative group">
-                                                    <button onClick={() => handleDeleteHistory(h.id)} className="absolute top-3 right-3 text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm">🗑️ 삭제</button>
-                                                    <div className="flex justify-between items-center mb-1">
-                                                        <span className="font-bold text-emerald-800 text-sm">✅ {h.type} 완료</span>
-                                                        <span className="font-mono text-gray-400 text-[11px] mr-12">{h.date}</span>
+                                                <div key={h.id} className={`p-4 border rounded-2xl text-xs space-y-1 relative group ${editingHistoryId === h.id ? 'bg-blue-50/50 border-blue-300' : 'bg-gray-50'}`}>
+                                                    <div className="absolute top-3 right-3 flex gap-1">
+                                                        <button onClick={() => handleEditHistoryInit(h)} className="text-gray-500 hover:text-blue-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">✏️ 수정</button>
+                                                        <button onClick={() => handleDeleteHistory(h.id)} className="text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
                                                     </div>
-                                                    {h.chemicals && h.chemicals.length > 0 && <p className="text-[11px] text-gray-600 font-medium">💊 약품: {h.chemicals.join(", ")}</p>}
+                                                    <div className="flex justify-between items-center mb-1 pr-24">
+                                                        <span className="font-bold text-emerald-800 text-sm">✅ {h.type} 완료</span>
+                                                        <span className="font-mono text-gray-400 text-[11px]">{h.date}</span>
+                                                    </div>
+                                                    {h.methods && h.methods.length > 0 && <p className="text-[11px] text-gray-700 font-bold">🔨 방식: {h.methods.join(", ")}</p>}
+                                                    {h.chemicals && h.chemicals.length > 0 && <p className="text-[11px] text-gray-600 font-medium">💊 약품/장비: {h.chemicals.join(", ")}</p>}
                                                     <p className="text-[10px] text-gray-400 pt-1">출동대원: {h.author}</p>
                                                     {h.type === "방역" && (
                                                         <button onClick={() => { 
@@ -587,6 +670,11 @@
                                     </label>
                                     <label className="col-span-2"><b>상호명 *</b><input name="name" required className="w-full p-2 border rounded-lg mt-1" /></label>
                                     <label className="col-span-2"><b>사업자등록번호 (선택)</b><input name="bizNumber" className="w-full p-2 border rounded-lg mt-1" placeholder="고객 증명서 조회용 (숫자만 입력)" /></label>
+                                    
+                                    {/* 💡 신규 등록 시 고객 직위 추가 란 */}
+                                    <label><b>고객 직위 *</b><select name="clientTitle" className="w-full p-2 border rounded-lg mt-1"><option>대표</option><option>점장</option><option>원장</option><option>소장</option><option>매니저</option></select></label>
+                                    <label><b>고객 성명 (선택)</b><input name="clientName" className="w-full p-2 border rounded-lg mt-1" placeholder="미입력 시 빈칸 출력" /></label>
+
                                     <label><b>담당 대원 *</b><select name="manager" className="w-full p-2 border rounded-lg mt-1">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
                                     <label><b>연락처 *</b><input name="phone" required className="w-full p-2 border rounded-lg mt-1" /></label>
                                     <label className="col-span-2 flex gap-2">
@@ -611,7 +699,7 @@
                         </div>
                     )}
 
-                    {/* 소독증명서 출력 서식 */}
+                    {/* 소독증명서 출력 (관리자 화면용) */}
                     {isCertOpen && selectedItem && (
                         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:bg-white print:p-0">
                             <div className="bg-white rounded-3xl p-8 max-w-3xl w-full max-h-[96vh] overflow-y-auto my-auto shadow-2xl print:shadow-none print:w-full print:h-auto print:max-h-none print:overflow-visible">
@@ -636,7 +724,16 @@
                                             </tr>
                                             <tr>
                                                 <td className="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" colSpan="2">관리(운영)자 확인</td>
-                                                <td className="border border-black p-5 text-[14px]" colSpan="3">직위 : 매니저 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 성명 : {certEntry?.author || "이원식"}</td>
+                                                
+                                                {/* 💡 증명서의 고객 확인란 (법적 서식 맞춤) */}
+                                                <td className="border border-black p-4 text-[14px]" colSpan="3">
+                                                    <div className="flex justify-between pr-8">
+                                                        <span>직위 : {selectedItem.clientTitle || "대표"}</span>
+                                                        <span>성명 : {selectedItem.clientName || ""}</span>
+                                                        <span className="text-gray-400">(서명 또는 인)</span>
+                                                    </div>
+                                                </td>
+
                                             </tr>
                                             <tr>
                                                 <td className="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" colSpan="2">소독기간</td>
