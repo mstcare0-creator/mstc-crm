@@ -159,12 +159,11 @@
                                         <tr>
                                             <td className="border border-black p-4 bg-gray-50 font-bold text-center text-[13px] md:text-[14px]" colSpan="2">관리(운영)자 확인</td>
                                             
-                                            {/* 💡 현장 편의를 위해 '출동대원(author)'이 자동으로 기입되도록 복구했습니다! */}
+                                            {/* 💡 '(서명 또는 인)' 문구 완전히 삭제 */}
                                             <td className="border border-black p-4 text-[13px] md:text-[14px]" colSpan="3">
                                                 <div className="flex justify-between pr-4 md:pr-10">
-                                                    <span>직위 : 담당자</span>
-                                                    <span>성명 : {selectedHistory.author || "이원식"}</span>
-                                                    <span className="text-gray-400">(서명 또는 인)</span>
+                                                    <span>직위 : {clientData.clientTitle || "대표"}</span>
+                                                    <span>성명 : {clientData.clientName || ""}</span>
                                                 </div>
                                             </td>
 
