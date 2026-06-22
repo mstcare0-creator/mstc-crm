@@ -62,12 +62,11 @@
                         const found = data.find(d => d.bizNumber && d.bizNumber.replace(/-/g, "").trim() === cleanInput);
                         
                         if(found) {
-                            // 💡 [신규 최적화] 최근 6개월 이내의 기록만 필터링
                             const sixMonthsAgo = new Date();
                             sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
                             const histories = (found.history || [])
-                                .filter(h => h.type === "방역" && new Date(h.date) >= sixMonthsAgo) // 6개월 제한 적용
+                                .filter(h => h.type === "방역" && new Date(h.date) >= sixMonthsAgo)
                                 .sort((a,b) => new Date(b.date) - new Date(a.date));
                                 
                             if(histories.length > 0) {
@@ -163,11 +162,11 @@
                                         <tr>
                                             <td className="border border-black p-4 bg-gray-50 font-bold text-center text-[13px] md:text-[14px]" colSpan="2">관리(운영)자 확인</td>
                                             
-                                            {/* 💡 '(서명 또는 인)' 문구 완전히 삭제 */}
+                                            {/* 💡 [핵심] 고객 직위/성명 출력 (성명이 비어있으면 출동대원 자동 반영) */}
                                             <td className="border border-black p-4 text-[13px] md:text-[14px]" colSpan="3">
                                                 <div className="flex justify-between pr-4 md:pr-10">
                                                     <span>직위 : {clientData.clientTitle || "대표"}</span>
-                                                    <span>성명 : {clientData.clientName || ""}</span>
+                                                    <span>성명 : {clientData.clientName || selectedHistory.author || "이원식"}</span>
                                                 </div>
                                             </td>
 
