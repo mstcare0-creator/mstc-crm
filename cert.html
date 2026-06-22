@@ -35,10 +35,26 @@
         function App() {
             const [bizNum, setBizNum] = useState("");
             const [clientData, setClientData] = useState(null);
+            
+            // 💡 과거 기록을 담아둘 새로운 상태 추가
+            const [availableHistories, setAvailableHistories] = useState([]);
+            const [selectedHistory, setSelectedHistory] = useState(null);
+            
             const [error, setError] = useState("");
             const [loading, setLoading] = useState(false);
             const [certNumber, setCertNumber] = useState(""); 
             const [sealImgFailed, setSealImgFailed] = useState(false); 
+
+            // 💡 특정 기록을 선택했을 때 화면과 증명서 번호를 업데이트하는 함수
+            const updateSelectedHistory = (historyObj) => {
+                setSelectedHistory(historyObj);
+                
+                // 해당 방역 기록의 고유 ID를 활용해 고정된 4자리 번호 생성
+                const yy = historyObj.date.split('-')[0].slice(2);
+                const mm = historyObj.date.split('-')[1];
+                const fixedNum = String(historyObj.id).slice(-4).padStart(4, '0'); 
+                setCertNumber(`제 ${yy}-${mm}-${fixedNum} 호`);
+            };
 
             const searchCert = (e) => {
                 e.preventDefault();
@@ -53,18 +69,15 @@
                         const found = data.find(d => d.bizNumber && d.bizNumber.replace(/-/g, "").trim() === cleanInput);
                         
                         if(found) {
-                            const latestHistory = (found.history || [])
+                            // 방역 기록 전체를 모아서 최신순 정렬
+                            const histories = (found.history || [])
                                 .filter(h => h.type === "방역")
-                                .sort((a,b) => new Date(b.date) - new Date(a.date))[0];
+                                .sort((a,b) => new Date(b.date) - new Date(a.date));
                                 
-                            if(latestHistory) {
-                                setClientData({ ...found, latestHistory });
-                                
-                                const yy = latestHistory.date.split('-')[0].slice(2);
-                                const mm = latestHistory.date.split('-')[1];
-                                const randomDigits = Math.floor(Math.random() * 9000 + 1000); 
-                                setCertNumber(`제 ${yy}-${mm}-${randomDigits} 호`);
-                                
+                            if(histories.length > 0) {
+                                setClientData(found);
+                                setAvailableHistories(histories); // 드롭다운용 전체 목록 저장
+                                updateSelectedHistory(histories[0]); // 가장 최신 기록을 기본으로 선택
                             } else {
                                 setError("조회된 가맹점이나, 진행된 방역 내역이 아직 없습니다.");
                             }
@@ -105,13 +118,35 @@
                     )}
 
                     {/* 📄 증명서 결과창 */}
-                    {clientData && (
+                    {clientData && selectedHistory && (
                         <div className="animate-fade-in mt-2">
-                            <div className="flex justify-end mb-6 print:hidden gap-2">
-                                <button onClick={() => setClientData(null)} className="px-5 py-3 bg-gray-100 border border-gray-300 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-200 shadow-sm">다른 번호 조회</button>
-                                <button onClick={() => window.print()} className="px-5 py-3 bg-[#0B5E4D] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#084b3e]">🖨️ 증명서 인쇄 (PDF 저장)</button>
+                            
+                            {/* 💡 [신규 기능] 월별 선택 드롭다운 및 제어 패널 */}
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 print:hidden gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-200">
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                    <span className="text-sm font-bold text-gray-600 whitespace-nowrap">📅 발급월 선택:</span>
+                                    <select 
+                                        value={selectedHistory.id} 
+                                        onChange={(e) => {
+                                            const target = availableHistories.find(h => h.id.toString() === e.target.value);
+                                            updateSelectedHistory(target);
+                                        }}
+                                        className="p-2 border rounded-xl text-sm font-bold bg-white outline-none focus:border-[#0B5E4D] shadow-sm w-full sm:w-auto"
+                                    >
+                                        {availableHistories.map(h => (
+                                            <option key={h.id} value={h.id}>
+                                                {h.date.split('-')[0]}년 {h.date.split('-')[1]}월 방역분
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex gap-2 w-full sm:w-auto">
+                                    <button onClick={() => setClientData(null)} className="flex-1 sm:flex-none px-4 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-100 shadow-sm">처음으로</button>
+                                    <button onClick={() => window.print()} className="flex-1 sm:flex-none px-4 py-2.5 bg-[#0B5E4D] text-white rounded-xl text-sm font-bold shadow-md hover:bg-[#084b3e]">🖨️ 인쇄/PDF</button>
+                                </div>
                             </div>
 
+                            {/* 인쇄 영역 */}
                             <div id="print-area" className="border border-black p-8 md:p-12 bg-white text-black text-[13px] leading-relaxed mx-auto w-full max-w-[210mm] shadow-sm print:shadow-none print:border-0" style={{ boxSizing: "border-box" }}>
                                 
                                 <div className="flex justify-between items-start mb-2">
@@ -136,20 +171,20 @@
                                         </tr>
                                         <tr>
                                             <td className="border border-black p-4 bg-gray-50 font-bold text-center text-[13px] md:text-[14px]" colSpan="2">관리(운영)자 확인</td>
-                                            <td className="border border-black p-4 text-[13px] md:text-[14px]" colSpan="3">직위 : 대표자 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 성명 : {clientData.latestHistory.author || "이원식"}</td>
+                                            <td className="border border-black p-4 text-[13px] md:text-[14px]" colSpan="3">직위 : 대표자 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 성명 : {selectedHistory.author || "이원식"}</td>
                                         </tr>
                                         <tr>
                                             <td className="border border-black p-4 bg-gray-50 font-bold text-center text-[13px] md:text-[14px]" colSpan="2">소독기간</td>
-                                            <td className="border border-black p-4 text-center font-mono text-[13px] md:text-[14px]" colSpan="3">{clientData.latestHistory.date} ~ {clientData.latestHistory.date}</td>
+                                            <td className="border border-black p-4 text-center font-mono text-[13px] md:text-[14px]" colSpan="3">{selectedHistory.date} ~ {selectedHistory.date}</td>
                                         </tr>
                                         <tr>
                                             <td className="border border-black p-4 bg-gray-50 font-bold text-center text-[13px] md:text-[14px]" rowSpan="2">소독 내용</td>
                                             <td className="border border-black p-4 bg-gray-50 font-bold text-[13px] md:text-[14px]">종류</td>
-                                            <td className="border border-black p-4 text-[13px] md:text-[14px]" colSpan="3">{(clientData.latestHistory.methods && clientData.latestHistory.methods.length > 0) ? clientData.latestHistory.methods.map(m=>m+" 잔류 분무").join(", ") : "살충 잔류 분무"}</td>
+                                            <td className="border border-black p-4 text-[13px] md:text-[14px]" colSpan="3">{(selectedHistory.methods && selectedHistory.methods.length > 0) ? selectedHistory.methods.map(m=>m+" 잔류 분무").join(", ") : "살충 잔류 분무"}</td>
                                         </tr>
                                         <tr>
                                             <td className="border border-black p-4 bg-gray-50 font-bold text-[13px] md:text-[14px]">약품 사용 내용</td>
-                                            <td className="border border-black p-4 font-medium text-[13px] md:text-[14px]" colSpan="3">{(clientData.latestHistory.chemicals && clientData.latestHistory.chemicals.length > 0) ? clientData.latestHistory.chemicals.join(", ") : "롱다운플러스"}</td>
+                                            <td className="border border-black p-4 font-medium text-[13px] md:text-[14px]" colSpan="3">{(selectedHistory.chemicals && selectedHistory.chemicals.length > 0) ? selectedHistory.chemicals.join(", ") : "롱다운플러스"}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -157,15 +192,14 @@
                                 <p className="my-10 text-[13px] md:text-[14px] text-justify leading-loose text-gray-900 px-2">&nbsp;&nbsp;&nbsp;「감염병의 예방 및 관리에 관한 법률」 제54조제1항 및 같은 법 시행규칙 제40조제2항에 따라 위와 같이 소독을 실시하였음을 증명합니다.</p>
                                 
                                 <h3 className="text-center font-bold text-[14px] md:text-[15px] my-10 tracking-widest">
-                                    {clientData.latestHistory.date.split("-")[0]} 년 &nbsp;&nbsp;&nbsp;&nbsp; {clientData.latestHistory.date.split("-")[1]} 월 &nbsp;&nbsp;&nbsp;&nbsp; {clientData.latestHistory.date.split("-")[2]} 일
+                                    {selectedHistory.date.split("-")[0]} 년 &nbsp;&nbsp;&nbsp;&nbsp; {selectedHistory.date.split("-")[1]} 월 &nbsp;&nbsp;&nbsp;&nbsp; {selectedHistory.date.split("-")[2]} 일
                                 </h3>
                                 
                                 <div className="mt-16 pt-8 border-t border-black text-[12px] md:text-[13px] space-y-3 relative">
                                     <p className="flex justify-between"><span><b>소독 실시자 상호(명칭)</b></span> <span className="font-bold text-right text-[13px] md:text-[14px]">{CERT_ISSUER.name}</span></p>
                                     <p className="flex justify-between"><span><b>소재지</b></span> <span className="text-right text-gray-700 text-[12px] md:text-[13px]">{CERT_ISSUER.address}</span></p>
                                     <p className="flex justify-between relative">
-                                        <span><b>성명(대표자)</b></span> <span className="font-bold text-right mr-16 text-[13px] md:text-[14px]">{CERT_ISSUER.reps}</span>
-                                        {/* 💡 도장 레이아웃 크기 및 위치 밸런스 조정 완료 */}
+                                        <span><b>성명(대표자)</b></span> <span className="font-bold text-right mr-24 text-[13px] md:text-[14px]">{CERT_ISSUER.reps}</span>
                                         <span className="absolute right-12 top-[-15px]">
                                             {COMPANY_SEAL_URL && !sealImgFailed ? (
                                                 <img 
