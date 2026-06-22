@@ -161,15 +161,13 @@
                                         </tr>
                                         <tr>
                                             <td className="border border-black p-4 bg-gray-50 font-bold text-center text-[13px] md:text-[14px]" colSpan="2">관리(운영)자 확인</td>
-                                            
-                                            {/* 💡 [핵심] 고객 직위/성명 출력 (성명이 비어있으면 출동대원 자동 반영) */}
                                             <td className="border border-black p-4 text-[13px] md:text-[14px]" colSpan="3">
                                                 <div className="flex justify-between pr-4 md:pr-10">
                                                     <span>직위 : {clientData.clientTitle || "대표"}</span>
+                                                    {/* 💡 고객 성명이 없으면 출동대원 이름 자동 출력 */}
                                                     <span>성명 : {clientData.clientName || selectedHistory.author || "이원식"}</span>
                                                 </div>
                                             </td>
-
                                         </tr>
                                         <tr>
                                             <td className="border border-black p-4 bg-gray-50 font-bold text-center text-[13px] md:text-[14px]" colSpan="2">소독기간</td>
