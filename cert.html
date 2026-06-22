@@ -62,8 +62,12 @@
                         const found = data.find(d => d.bizNumber && d.bizNumber.replace(/-/g, "").trim() === cleanInput);
                         
                         if(found) {
+                            // 💡 [신규 최적화] 최근 6개월 이내의 기록만 필터링
+                            const sixMonthsAgo = new Date();
+                            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
                             const histories = (found.history || [])
-                                .filter(h => h.type === "방역")
+                                .filter(h => h.type === "방역" && new Date(h.date) >= sixMonthsAgo) // 6개월 제한 적용
                                 .sort((a,b) => new Date(b.date) - new Date(a.date));
                                 
                             if(histories.length > 0) {
@@ -71,7 +75,7 @@
                                 setAvailableHistories(histories);
                                 updateSelectedHistory(histories[0]); 
                             } else {
-                                setError("조회된 가맹점이나, 진행된 방역 내역이 아직 없습니다.");
+                                setError("최근 6개월 이내에 진행된 방역 내역이 없습니다.");
                             }
                         } else {
                             setError("등록된 사업자번호가 아닙니다. 띄어쓰기나 - 기호 없이 정확히 입력해주세요.");
@@ -102,7 +106,7 @@
                                 autoFocus
                             />
                             <button type="submit" disabled={loading} className="w-full bg-[#0B5E4D] text-white py-4 rounded-xl font-bold hover:bg-[#084b3e] disabled:opacity-50 transition-all shadow-md text-base">
-                                {loading ? "데이터베이스 조회 중..." : "증명서 조회하기"}
+                                {loading ? "데이터베이스 조회 중..." : "최근 6개월 증명서 조회하기"}
                             </button>
                             {error && <p className="text-red-500 text-sm font-bold text-center mt-2 bg-red-50 py-2 rounded-lg">{error}</p>}
                         </form>
