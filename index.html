@@ -52,15 +52,15 @@
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
                             setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v23", JSON.stringify(fetchedData));
+                            localStorage.setItem("mstc_crm_data_v24", JSON.stringify(fetchedData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v23");
+                            const local = localStorage.getItem("mstc_crm_data_v24");
                             if(local) setData(JSON.parse(local));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v23");
+                        const local = localStorage.getItem("mstc_crm_data_v24");
                         if(local) setData(JSON.parse(local));
                         setLoading(false);
                     });
@@ -68,7 +68,7 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v23", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v24", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
@@ -99,7 +99,7 @@
             const [editingHistoryId, setEditingHistoryId] = useState(null);
 
             const [showPayForm, setShowPayForm] = useState(false);
-            const [payForm, setPayForm] = useState({ month: CURRENT_MONTH, amount: "30000", status: "수금완료", note: "" });
+            const [payForm, setPayForm] = useState({ month: CURRENT_MONTH, amount: "30000", status: "수금완료", method: "계좌이체", note: "" });
 
             const [customMethodInput, setCustomMethodInput] = useState("");
             const [customMethodsList, setCustomMethodsList] = useState(() => {
@@ -160,7 +160,6 @@
                 setHistoryForm(prev => ({ ...prev, chemicals: prev.chemicals.filter(c => c !== chemToRemove) }));
             };
 
-            // 💡 [핵심 해결] 팝업 잘림 현상 방지를 위해 수동 알림창(alert) 필수 입력 검사 도입
             const handleRegister = (e) => {
                 e.preventDefault();
                 const fd = new FormData(e.target);
@@ -186,7 +185,13 @@
                     clientName: fd.get("clientName") || "",     
                     gu: fd.get("gu"), dong: fd.get("dong"), address: address, area: fd.get("area"),
                     contractStart: fd.get("contractStart") || TODAY, serviceType: fd.get("serviceType"), payStatus: payStat,
-                    cycle: fd.get("cycle"), fee: fd.get("fee") || "30000", etcInfo: fd.get("etcInfo") || "",
+                    cycle: fd.get("cycle"), fee: fd.get("fee") || "30000", 
+                    
+                    // 💡 [신규] 결제 방식 및 제공 서비스 저장
+                    payMethod: fd.get("payMethod") || "계좌이체",
+                    providedService: fd.get("providedService") || "",
+                    
+                    etcInfo: fd.get("etcInfo") || "",
                     collectionStatus: fd.get("collectionStatus") || "수금완료", uncollectedAmount: fd.get("uncollectedAmount") || "0",
                     history: [{id: Date.now(), date: TODAY, type: "상담", content: "신규 등록 완료", author: fd.get("manager")}], paymentHistory: []
                 };
@@ -248,11 +253,12 @@
 
             const handleAddPayment = (e) => {
                 e.preventDefault();
-                const newPay = { id: Date.now(), month: payForm.month, amount: payForm.amount, status: payForm.status, note: payForm.note };
+                // 💡 [수정] 수금 기록에 결제 방식(method) 추가 저장
+                const newPay = { id: Date.now(), month: payForm.month, amount: payForm.amount, status: payForm.status, method: payForm.method, note: payForm.note };
                 const updatedItem = { ...selectedItem, paymentHistory: [newPay, ...(selectedItem.paymentHistory || [])] };
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item));
                 setSelectedItem(updatedItem); setShowPayForm(false);
-                setPayForm({ month: CURRENT_MONTH, amount: selectedItem.fee || "30000", status: "수금완료", note: "" });
+                setPayForm({ month: CURRENT_MONTH, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "" });
             };
             const handleDeletePayment = (logId) => {
                 if(!confirm("삭제하시겠습니까?")) return;
@@ -338,7 +344,6 @@
             }, [data, chartManager]);
 
             const maxChartVal = Math.max(1, ...chartStats.map(s => Math.max(s.newCount, s.termCount, Math.abs(s.netCount))));
-            const hasCustomMethodSelected = (historyForm.methods || []).some(m => !["살균", "살충"].includes(m));
 
             if (loading) return <div className="flex items-center justify-center min-h-screen font-bold text-emerald-800">데이터 로드 중... 잠시만 기다려주세요!</div>;
 
@@ -446,7 +451,7 @@
                                 </div>
                             </div>
 
-                            {/* 우측 상세창 */}
+                            {/* 🔎 우측 상세창 */}
                             {selectedItem && (
                                 <div className="w-full lg:w-[440px] bg-white h-fit shadow-2xl rounded-3xl border flex flex-col z-20 animate-slide-in overflow-hidden">
                                     <div className="p-5 border-b flex justify-between items-center bg-gray-50 rounded-t-3xl">
@@ -478,7 +483,6 @@
                                                     <form onSubmit={handleSaveEdit} className="bg-gray-50 p-4 rounded-2xl border space-y-3">
                                                         <h4 className="font-bold text-sm border-b pb-2 mb-2">✏️ 업체 정보 수정</h4>
                                                         <div className="grid grid-cols-2 gap-3 text-xs">
-                                                            {/* 💡 [핵심] HTML 기본 검증(required) 제거 -> 수동 검증으로 변경 */}
                                                             <label className="col-span-2">상호명 <input value={editForm.name || ""} onChange={e=>setEditForm({...editForm, name: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="필수 입력" /></label>
                                                             <label className="col-span-2">사업자등록번호 <input value={editForm.bizNumber || ""} onChange={e=>setEditForm({...editForm, bizNumber: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="고객 증명서 조회용 (숫자만 입력)" /></label>
                                                             
@@ -498,11 +502,18 @@
                                                             <label>계약금액 <input type="number" value={editForm.fee || ""} onChange={e=>setEditForm({...editForm, fee: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
                                                             <label>방역주기 <select value={editForm.cycle || "월1회"} onChange={e=>setEditForm({...editForm, cycle: e.target.value})} className="border p-2 w-full rounded outline-none">{CYCLES.map(c=><option key={c}>{c}</option>)}</select></label>
                                                             <label>방역구분 <select value={editForm.serviceType || "정기"} onChange={e=>setEditForm({...editForm, serviceType: e.target.value})} className="border p-2 w-full rounded outline-none"><option>정기</option><option>분기</option><option>무료</option></select></label>
-                                                            <label>결제상태 <select value={editForm.payStatus || "유료"} onChange={e=>setEditForm({...editForm, payStatus: e.target.value})} className="border p-2 w-full rounded outline-none bg-amber-50 font-bold text-amber-900"><option value="유료">유료</option><option value="무료">무료</option><option value="일시중지">일시중지</option><option value="해지">해지</option></select></label>
-                                                            <label>수금 상태 <select value={editForm.collectionStatus || "수금완료"} onChange={e=>setEditForm({...editForm, collectionStatus: e.target.value})} className="border p-2 w-full rounded outline-none font-bold text-rose-700"><option value="수금완료">수금완료</option><option value="미수금">🚨 미수금 발생</option></select></label>
+                                                            
+                                                            {/* 💡 [신규] 결제 방식 & 제공 서비스 폼 */}
+                                                            <label>결제 방식 <select value={editForm.payMethod || "계좌이체"} onChange={e=>setEditForm({...editForm, payMethod: e.target.value})} className="border p-2 w-full rounded outline-none"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>기타</option></select></label>
+                                                            <label>결제 상태 <select value={editForm.payStatus || "유료"} onChange={e=>setEditForm({...editForm, payStatus: e.target.value})} className="border p-2 w-full rounded outline-none bg-amber-50 font-bold text-amber-900"><option value="유료">유료</option><option value="무료">무료</option><option value="일시중지">일시중지</option><option value="해지">해지</option></select></label>
+                                                            
+                                                            <label className="col-span-2">제공 서비스 <input value={editForm.providedService || ""} onChange={e=>setEditForm({...editForm, providedService: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="예: 포충기 대여, 쥐 트랩 설치 등" /></label>
+
+                                                            <label className="col-span-2 text-rose-700 font-bold border-t pt-2 mt-2">미수금 및 추가 정보</label>
+                                                            <label className="col-span-2">수금 상태 <select value={editForm.collectionStatus || "수금완료"} onChange={e=>setEditForm({...editForm, collectionStatus: e.target.value})} className="border p-2 w-full rounded outline-none font-bold text-rose-700"><option value="수금완료">수금완료</option><option value="미수금">🚨 미수금 발생</option></select></label>
                                                             
                                                             {editForm.collectionStatus === "미수금" && (
-                                                                <label className="text-rose-700 font-bold col-span-2">미수금액 (원) <input type="number" value={editForm.uncollectedAmount || ""} onChange={e=>setEditForm({...editForm, uncollectedAmount: e.target.value})} className="border border-rose-300 p-2 w-full rounded outline-none bg-rose-50" placeholder="숫자만 입력" /></label>
+                                                                <label className="text-rose-700 font-bold col-span-2">업체 기본 미수금액 (원) <input type="number" value={editForm.uncollectedAmount || ""} onChange={e=>setEditForm({...editForm, uncollectedAmount: e.target.value})} className="border border-rose-300 p-2 w-full rounded outline-none bg-rose-50" placeholder="숫자만 입력" /></label>
                                                             )}
                                                             <label className="col-span-2 mt-2">기타 (추가 정보) <textarea value={editForm.etcInfo || ""} onChange={e=>setEditForm({...editForm, etcInfo: e.target.value})} className="border p-2 w-full rounded outline-none h-16 mt-1" placeholder="특이사항 등 자유롭게 입력"></textarea></label>
                                                         </div>
@@ -521,8 +532,12 @@
                                                             <div><p className="text-gray-400">방역시작일</p><p className="font-mono font-bold text-[#0B5E4D] mt-1">{selectedItem.contractStart || "미기입"}</p></div>
                                                             <div><p className="text-gray-400">방역주기</p><p className="font-bold mt-1 text-gray-800">{selectedItem.cycle || "월1회"}</p></div>
                                                             <div><p className="text-gray-400">방역구분</p><p className="font-bold mt-1 text-blue-800">{selectedItem.serviceType}</p></div>
-                                                            <div><p className="text-gray-400">결제상태</p><p className="font-bold mt-1 text-[#0B5E4D]">{selectedItem.payStatus}</p></div>
                                                             <div><p className="text-gray-400">계약금액</p><p className="font-mono font-bold mt-1">₩{Number(String(selectedItem.fee).replace(/,/g, '') || 0).toLocaleString()}</p></div>
+                                                            <div><p className="text-gray-400">기본 결제방식</p><p className="font-bold mt-1 text-indigo-700">{selectedItem.payMethod || "계좌이체"}</p></div>
+                                                            <div><p className="text-gray-400">기본 결제상태</p><p className="font-bold mt-1 text-[#0B5E4D]">{selectedItem.payStatus}</p></div>
+                                                            
+                                                            {/* 💡 [신규] 제공 서비스 표시 */}
+                                                            <div className="col-span-2"><p className="text-gray-400">제공 서비스 (포충기 등)</p><p className="font-bold mt-1 text-gray-800">{selectedItem.providedService || "없음"}</p></div>
                                                         </div>
                                                         <div className={`col-span-2 p-3 rounded-lg border ${selectedItemDebt > 0 ? 'bg-rose-50 border-rose-200' : 'bg-white'}`}>
                                                             <p className="text-gray-500 font-bold mb-1">현재 총 미납액</p>
@@ -557,8 +572,12 @@
                                                         <div className="grid grid-cols-2 gap-3">
                                                             <label className="block"><b>수금 월</b><input type="month" value={payForm.month} onChange={e => setPayForm({...payForm, month: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" required /></label>
                                                             <label className="block"><b>수금 상태</b><select value={payForm.status} onChange={e => setPayForm({...payForm, status: e.target.value})} className={`w-full mt-1 p-2 border rounded-lg outline-none font-bold ${payForm.status === '미수금' ? 'text-red-600' : 'text-emerald-700'}`}><option>수금완료</option><option>미수금</option></select></label>
-                                                            <label className="block col-span-2"><b>결제/미수 금액 (원)</b><input type="number" value={payForm.amount} onChange={e => setPayForm({...payForm, amount: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" required /></label>
-                                                            <label className="block col-span-2"><b>메모 (페이소프트, 계좌입금 등)</b><input type="text" value={payForm.note} onChange={e => setPayForm({...payForm, note: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" placeholder="비고란" /></label>
+                                                            <label className="block"><b>결제/미수 금액 (원)</b><input type="number" value={payForm.amount} onChange={e => setPayForm({...payForm, amount: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" required /></label>
+                                                            
+                                                            {/* 💡 [신규] 결제 수단 선택 폼 */}
+                                                            <label className="block"><b>결제 방식</b><select value={payForm.method} onChange={e => setPayForm({...payForm, method: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none font-bold"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option></select></label>
+                                                            
+                                                            <label className="block col-span-2"><b>메모 (페이소프트, 입금자명 등)</b><input type="text" value={payForm.note} onChange={e => setPayForm({...payForm, note: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" placeholder="비고란" /></label>
                                                         </div>
                                                         <div className="flex gap-2 justify-end pt-2">
                                                             <button type="button" onClick={() => setShowPayForm(false)} className="px-4 py-2 border rounded-xl bg-white font-bold">취소</button>
@@ -583,7 +602,11 @@
                                                                 <span className={`font-bold text-sm ${p.status === '미수금' ? 'text-red-600' : 'text-blue-600'}`}>💰 {p.status}</span>
                                                                 <span className="font-mono text-gray-400 text-[11px] mr-12">{p.month}</span>
                                                             </div>
-                                                            <p className="text-[12px] font-bold text-gray-800">금액: ₩{Number(p.amount).toLocaleString()}</p>
+                                                            <p className="text-[12px] font-bold text-gray-800">
+                                                                금액: ₩{Number(p.amount).toLocaleString()}
+                                                                {/* 💡 [신규] 기록 리스트에 결제 방식 표시 */}
+                                                                {p.method && <span className="ml-2 text-[10px] text-gray-500 font-normal bg-gray-100 px-1.5 py-0.5 rounded">[{p.method}]</span>}
+                                                            </p>
                                                             {p.note && <p className="text-[11px] text-gray-500 pt-1">메모: {p.note}</p>}
                                                         </div>
                                                     ))}
@@ -775,7 +798,6 @@
                                         <select name="tab" defaultValue={currentTab === "prospect" ? "prospect" : "active"} className="w-full p-2 border rounded-lg mt-1 bg-gray-50"><option value="active">방역 거래처 (운영)</option><option value="prospect">영업처 (대기)</option></select>
                                     </label>
                                     
-                                    {/* 💡 수동 검증 적용됨: 브라우저 숨김 팝업 막기 위해 required 제거 */}
                                     <label className="col-span-2"><b>상호명 *</b><input name="name" className="w-full p-2 border rounded-lg mt-1" placeholder="필수 입력" /></label>
                                     <label className="col-span-2"><b>사업자등록번호 (선택)</b><input name="bizNumber" className="w-full p-2 border rounded-lg mt-1" placeholder="고객 증명서 조회용 (숫자만 입력)" /></label>
                                     
@@ -797,7 +819,13 @@
                                     <label><b>계약 금액 *</b><input type="number" name="fee" defaultValue="30000" className="w-full p-2 border rounded-lg mt-1" /></label>
                                     <label><b>방역 주기 *</b><select name="cycle" className="w-full p-2 border rounded-lg mt-1">{CYCLES.map(c=><option key={c}>{c}</option>)}</select></label>
                                     <label><b>방역 구분 *</b><select name="serviceType" className="w-full p-2 border rounded-lg mt-1"><option>정기</option><option>분기</option><option>무료</option></select></label>
+                                    
+                                    {/* 💡 [신규] 결제 방식 & 제공 서비스 폼 */}
+                                    <label><b>결제 방식 *</b><select name="payMethod" className="w-full p-2 border rounded-lg mt-1"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>기타</option></select></label>
                                     <label><b>결제 상태 *</b><select name="payStatus" className="w-full p-2 border rounded-lg mt-1"><option>유료</option><option>무료</option><option>일시중지</option><option>해지</option></select></label>
+                                    
+                                    <label className="col-span-2"><b>제공 서비스</b><input name="providedService" className="w-full p-2 border rounded-lg mt-1" placeholder="예: 포충기 대여, 방향제 등" /></label>
+
                                     <label className="col-span-2 mt-2"><b>기타 (추가 정보)</b><textarea name="etcInfo" className="w-full p-2 border rounded-lg mt-1 h-16" placeholder="특이사항 등 자유롭게 입력"></textarea></label>
                                 </div>
                                 <div className="flex gap-2 justify-end mt-6">
