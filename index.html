@@ -52,15 +52,15 @@
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
                             setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v20", JSON.stringify(fetchedData));
+                            localStorage.setItem("mstc_crm_data_v21", JSON.stringify(fetchedData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v20");
+                            const local = localStorage.getItem("mstc_crm_data_v21");
                             if(local) setData(JSON.parse(local));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v20");
+                        const local = localStorage.getItem("mstc_crm_data_v21");
                         if(local) setData(JSON.parse(local));
                         setLoading(false);
                     });
@@ -68,7 +68,7 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v20", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v21", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
@@ -85,6 +85,14 @@
             const [chartManager, setChartManager] = useState("전체 담당자");
             
             const [selectedItem, setSelectedItem] = useState(null);
+            
+            // 💡 [신규] 우측 상세창 내부 탭 제어 상태 ("info" | "payment" | "history")
+            const [detailTab, setDetailTab] = useState("info");
+            
+            // 💡 [신규] 연도 필터 상태
+            const [historyYearFilter, setHistoryYearFilter] = useState("all");
+            const [paymentYearFilter, setPaymentYearFilter] = useState("all");
+
             const [isEditing, setIsEditing] = useState(false);
             const [editForm, setEditForm] = useState({});
             const [isModalOpen, setIsModalOpen] = useState(false);
@@ -120,6 +128,17 @@
             const [certEntry, setCertEntry] = useState(null);
             const [certNumber, setCertNumber] = useState("");
             const [sealImgFailed, setSealImgFailed] = useState(false); 
+
+            // 리스트 렌더링 시 우측 창 열기 함수 오버라이드
+            const handleSelectItem = (item) => {
+                setSelectedItem(item);
+                setIsEditing(false);
+                setShowHistoryForm(false);
+                setShowPayForm(false);
+                setDetailTab("info"); // 새 항목 누르면 무조건 기본 정보 탭으로
+                setHistoryYearFilter("all");
+                setPaymentYearFilter("all");
+            };
 
             const handleAddCustomMethod = () => {
                 const val = customMethodInput.trim();
@@ -234,7 +253,6 @@
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item)); setSelectedItem(updatedItem);
             };
 
-            // 💡 [핵심] 총 미수금 계산 로직 완벽 연동 (수정폼 미수금액 + 수금기록 미수금액 모두 합산)
             let totalUncollected = 0;
             let uncollectedClientsCount = 0;
 
@@ -268,7 +286,6 @@
                 return mapped;
             }, [data]);
 
-            // 선택된 아이템도 실시간 부채액 갱신
             const selectedItemDebt = selectedItem ? enrichedData.find(d => d.id === selectedItem.id)?.computedDebt || 0 : 0;
 
             const currentList = useMemo(() => {
@@ -317,6 +334,13 @@
             const hasCustomMethodSelected = (historyForm.methods || []).some(m => !["살균", "살충"].includes(m));
 
             if (loading) return <div className="flex items-center justify-center min-h-screen font-bold text-emerald-800">데이터 로드 중... 잠시만 기다려주세요!</div>;
+
+            // 💡 [연도 필터링을 위한 데이터 가공]
+            const availableHistoryYears = selectedItem && selectedItem.history ? [...new Set(selectedItem.history.map(h => h.date ? h.date.split('-')[0] : ''))].filter(Boolean).sort().reverse() : [];
+            const filteredHistory = selectedItem && selectedItem.history ? selectedItem.history.filter(h => historyYearFilter === 'all' || (h.date && h.date.startsWith(historyYearFilter))) : [];
+
+            const availablePaymentYears = selectedItem && selectedItem.paymentHistory ? [...new Set(selectedItem.paymentHistory.map(p => p.month ? p.month.split('-')[0] : ''))].filter(Boolean).sort().reverse() : [];
+            const filteredPayment = selectedItem && selectedItem.paymentHistory ? selectedItem.paymentHistory.filter(p => paymentYearFilter === 'all' || (p.month && p.month.startsWith(paymentYearFilter))) : [];
 
             return (
                 <div>
@@ -375,6 +399,7 @@
                         </div>
 
                         <div className="flex flex-col lg:flex-row gap-6">
+                            {/* 왼쪽 리스트 보드 */}
                             <div className="flex-1 bg-white p-6 rounded-3xl border shadow-sm h-fit">
                                 <div className="flex gap-2 p-1 bg-gray-50 border rounded-xl mb-4 overflow-x-auto">
                                     <button onClick={() => { setCurrentTab("active"); setSelectedItem(null); }} className={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'active' ? 'bg-white text-emerald-800 shadow-sm border' : 'text-gray-500'}`}>방역 거래처 ({enrichedData.filter(d=>d.tab==='active').length})</button>
@@ -394,7 +419,7 @@
 
                                 <div className="flex flex-col gap-3">
                                     {currentList.map(item => (
-                                        <div key={item.id} onClick={() => { setSelectedItem(item); setIsEditing(false); setShowHistoryForm(false); setShowPayForm(false); }} className={`p-4 border rounded-2xl cursor-pointer transition-all ${selectedItem?.id === item.id ? 'bg-emerald-50/50 border-[#0B5E4D] shadow-sm' : 'bg-white hover:bg-gray-50'}`}>
+                                        <div key={item.id} onClick={() => handleSelectItem(item)} className={`p-4 border rounded-2xl cursor-pointer transition-all ${selectedItem?.id === item.id ? 'bg-emerald-50/50 border-[#0B5E4D] shadow-sm' : 'bg-white hover:bg-gray-50'}`}>
                                             <div className="flex justify-between items-center">
                                                 <div>
                                                     <p className="font-bold text-sm text-gray-800">{item.name}</p>
@@ -403,8 +428,6 @@
                                                 <div className="flex flex-col items-end gap-1 text-[10px] font-bold">
                                                     <span className={`px-2 py-0.5 rounded ${item.serviceType === '정기' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>{item.serviceType}</span>
                                                     <span className={`px-2 py-0.5 rounded ${item.payStatus === '유료' ? 'bg-[#E3F2EC] text-[#0B5E4D]' : item.payStatus === '무료' ? 'bg-gray-200 text-gray-700' : item.payStatus === '일시중지' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>{item.payStatus}</span>
-                                                    
-                                                    {/* 💡 개별 업체의 총 미수금액(통합본) 표시 */}
                                                     {item.computedDebt > 0 && <span className="bg-rose-100 text-rose-700 px-2 py-0.5 rounded shadow-sm border border-rose-200 animate-pulse">🚨 총 미납액: ₩{item.computedDebt.toLocaleString()}</span>}
                                                 </div>
                                             </div>
@@ -414,7 +437,7 @@
                                 </div>
                             </div>
 
-                            {/* 우측 상세창 */}
+                            {/* 🔎 우측 상세창 (탭 구조 완벽 적용) */}
                             {selectedItem && (
                                 <div className="w-full lg:w-[440px] bg-white h-fit shadow-2xl rounded-3xl border flex flex-col z-20 animate-slide-in overflow-hidden">
                                     <div className="p-5 border-b flex justify-between items-center bg-gray-50 rounded-t-3xl">
@@ -426,278 +449,314 @@
                                             <button onClick={() => setSelectedItem(null)} className="text-2xl font-bold text-gray-400 hover:text-black">×</button>
                                         </div>
                                     </div>
+                                    
+                                    {/* 💡 [신규] 상세창 내부 탭 컨트롤 */}
+                                    <div className="flex border-b bg-white text-xs font-bold">
+                                        <button onClick={() => { setDetailTab("info"); setIsEditing(false); setShowHistoryForm(false); setShowPayForm(false); }} className={`flex-1 py-3 transition-all ${detailTab === 'info' ? 'border-b-2 border-[#0B5E4D] text-[#0B5E4D]' : 'text-gray-400 hover:bg-gray-50'}`}>📋 정보</button>
+                                        <button onClick={() => { setDetailTab("payment"); setIsEditing(false); setShowHistoryForm(false); setShowPayForm(false); }} className={`flex-1 py-3 transition-all ${detailTab === 'payment' ? 'border-b-2 border-amber-600 text-amber-700' : 'text-gray-400 hover:bg-gray-50'}`}>💰 수금 내역</button>
+                                        <button onClick={() => { setDetailTab("history"); setIsEditing(false); setShowHistoryForm(false); setShowPayForm(false); }} className={`flex-1 py-3 transition-all ${detailTab === 'history' ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-400 hover:bg-gray-50'}`}>📝 방역 기록</button>
+                                    </div>
 
-                                    <div className="p-5 overflow-y-auto space-y-5">
-                                        {selectedItem.tab === "prospect" && (
-                                            <button onClick={convertToActive} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-sm font-bold shadow-sm animate-pulse">🎉 계약 성공 (방역 거래처로 즉시 전환)</button>
+                                    <div className="p-5 overflow-y-auto max-h-[70vh] bg-white">
+                                        
+                                        {/* ===================== [1] 정보 탭 ===================== */}
+                                        {detailTab === "info" && (
+                                            <div className="space-y-4 animate-fade-in">
+                                                {selectedItem.tab === "prospect" && (
+                                                    <button onClick={convertToActive} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-sm font-bold shadow-sm animate-pulse mb-2">🎉 계약 성공 (방역 거래처로 전환)</button>
+                                                )}
+
+                                                {isEditing ? (
+                                                    <form onSubmit={handleSaveEdit} className="bg-gray-50 p-4 rounded-2xl border space-y-3">
+                                                        <h4 className="font-bold text-sm border-b pb-2 mb-2">✏️ 업체 정보 수정</h4>
+                                                        <div className="grid grid-cols-2 gap-3 text-xs">
+                                                            <label className="col-span-2">상호명 <input value={editForm.name || ""} onChange={e=>setEditForm({...editForm, name: e.target.value})} className="border p-2 w-full rounded outline-none" required /></label>
+                                                            <label className="col-span-2">사업자등록번호 <input value={editForm.bizNumber || ""} onChange={e=>setEditForm({...editForm, bizNumber: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="고객 증명서 조회용 (숫자만 입력)" /></label>
+                                                            <label>고객 직위 <select value={editForm.clientTitle || "대표"} onChange={e=>setEditForm({...editForm, clientTitle: e.target.value})} className="border p-2 w-full rounded outline-none"><option>대표</option><option>점장</option><option>원장</option><option>소장</option><option>매니저</option></select></label>
+                                                            <label>고객 성명 <input value={editForm.clientName || ""} onChange={e=>setEditForm({...editForm, clientName: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="미입력 시 빈칸 출력" /></label>
+                                                            <label>담당 대원 <select value={editForm.manager || ""} onChange={e=>setEditForm({...editForm, manager: e.target.value})} className="border p-2 w-full rounded outline-none">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
+                                                            <label>평수 <input value={editForm.area || ""} onChange={e=>setEditForm({...editForm, area: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
+                                                            <label className="col-span-2 flex gap-2">
+                                                                <div className="flex-1">시/도 <select value={editForm.gu || "부산"} onChange={e=>setEditForm({...editForm, gu: e.target.value, dong: REGIONS[e.target.value][0]})} className="border p-2 w-full rounded-lg mt-1 bg-white">{Object.keys(REGIONS).map(r=><option key={r}>{r}</option>)}</select></div>
+                                                                <div className="flex-1">구/군 <select value={editForm.dong || ""} onChange={e=>setEditForm({...editForm, dong: e.target.value})} className="border p-2 w-full rounded-lg mt-1 bg-white">{REGIONS[editForm.gu || "부산"].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
+                                                            </label>
+                                                            <label className="col-span-2">상세 주소 <input value={editForm.address || ""} onChange={e=>setEditForm({...editForm, address: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
+                                                            
+                                                            <label className="col-span-2 text-emerald-800 font-bold border-t pt-2 mt-2">운영 및 수금 관리</label>
+                                                            <label>방역시작일 <input type="date" value={editForm.contractStart || ""} onChange={e=>setEditForm({...editForm, contractStart: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
+                                                            <label>계약금액 <input type="number" value={editForm.fee || ""} onChange={e=>setEditForm({...editForm, fee: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
+                                                            <label>방역주기 <select value={editForm.cycle || "월1회"} onChange={e=>setEditForm({...editForm, cycle: e.target.value})} className="border p-2 w-full rounded outline-none">{CYCLES.map(c=><option key={c}>{c}</option>)}</select></label>
+                                                            <label>방역구분 <select value={editForm.serviceType || "정기"} onChange={e=>setEditForm({...editForm, serviceType: e.target.value})} className="border p-2 w-full rounded outline-none"><option>정기</option><option>분기</option><option>무료</option></select></label>
+                                                            <label>결제상태 <select value={editForm.payStatus || "유료"} onChange={e=>setEditForm({...editForm, payStatus: e.target.value})} className="border p-2 w-full rounded outline-none bg-amber-50 font-bold text-amber-900"><option value="유료">유료</option><option value="무료">무료</option><option value="일시중지">일시중지</option><option value="해지">해지</option></select></label>
+                                                            <label>수금 상태 <select value={editForm.collectionStatus || "수금완료"} onChange={e=>setEditForm({...editForm, collectionStatus: e.target.value})} className="border p-2 w-full rounded outline-none font-bold text-rose-700"><option value="수금완료">수금완료</option><option value="미수금">🚨 미수금 발생</option></select></label>
+                                                            
+                                                            {editForm.collectionStatus === "미수금" && (
+                                                                <label className="text-rose-700 font-bold col-span-2">미수금액 (원) <input type="number" value={editForm.uncollectedAmount || ""} onChange={e=>setEditForm({...editForm, uncollectedAmount: e.target.value})} className="border border-rose-300 p-2 w-full rounded outline-none bg-rose-50" placeholder="숫자만 입력" /></label>
+                                                            )}
+                                                            <label className="col-span-2 mt-2">기타 (추가 정보) <textarea value={editForm.etcInfo || ""} onChange={e=>setEditForm({...editForm, etcInfo: e.target.value})} className="border p-2 w-full rounded outline-none h-16 mt-1" placeholder="특이사항 등 자유롭게 입력"></textarea></label>
+                                                        </div>
+                                                        <div className="flex gap-2 justify-end pt-3">
+                                                            <button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 bg-white border rounded-xl text-xs font-bold">취소</button>
+                                                            <button type="submit" className="px-5 py-2 bg-[#0B5E4D] text-white rounded-xl text-xs font-bold">저장 및 반영</button>
+                                                        </div>
+                                                    </form>
+                                                ) : (
+                                                    <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-xs">
+                                                        <div className="col-span-2 border-b pb-2 mb-2"><p className="text-gray-400">사업자등록번호</p><p className="font-mono font-bold text-gray-800 mt-1">{selectedItem.bizNumber || "미등록"}</p></div>
+                                                        <div><p className="text-gray-400">고객 직위/성명</p><p className="font-bold text-blue-800 mt-1">{selectedItem.clientTitle || "대표"} {selectedItem.clientName || ""}</p></div>
+                                                        <div><p className="text-gray-400">담당 대원</p><p className="font-bold mt-1">{selectedItem.manager}</p></div>
+                                                        <div className="col-span-2"><p className="text-gray-400">연락처 / 주소</p><p className="font-bold mt-1">{selectedItem.phone} <br/><span className="font-normal text-gray-600">{selectedItem.gu} {selectedItem.dong} {selectedItem.address}</span></p></div>
+                                                        <div className="col-span-2 border-t pt-3 mt-1 grid grid-cols-2 gap-4">
+                                                            <div><p className="text-gray-400">방역시작일</p><p className="font-mono font-bold text-[#0B5E4D] mt-1">{selectedItem.contractStart || "미기입"}</p></div>
+                                                            <div><p className="text-gray-400">방역주기</p><p className="font-bold mt-1 text-gray-800">{selectedItem.cycle || "월1회"}</p></div>
+                                                            <div><p className="text-gray-400">방역구분</p><p className="font-bold mt-1 text-blue-800">{selectedItem.serviceType}</p></div>
+                                                            <div><p className="text-gray-400">결제상태</p><p className="font-bold mt-1 text-[#0B5E4D]">{selectedItem.payStatus}</p></div>
+                                                            <div><p className="text-gray-400">계약금액</p><p className="font-mono font-bold mt-1">₩{Number(String(selectedItem.fee).replace(/,/g, '') || 0).toLocaleString()}</p></div>
+                                                        </div>
+                                                        <div className={`col-span-2 p-3 rounded-lg border ${selectedItemDebt > 0 ? 'bg-rose-50 border-rose-200' : 'bg-white'}`}>
+                                                            <p className="text-gray-500 font-bold mb-1">현재 총 미납액</p>
+                                                            {selectedItemDebt > 0 ? 
+                                                                <p className="font-bold text-rose-700 text-sm">🚨 총 미납 잔액: ₩{selectedItemDebt.toLocaleString()}</p> : 
+                                                                <p className="font-bold text-[#0B5E4D] text-sm">✅ 수금 문제 없음</p>
+                                                            }
+                                                        </div>
+                                                        <div className="col-span-2 border-t pt-3 mt-1">
+                                                            <p className="text-gray-400">기타 (추가 정보)</p>
+                                                            <p className="font-medium text-gray-800 mt-1 whitespace-pre-wrap">{selectedItem.etcInfo || "등록된 추가 정보가 없습니다."}</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {!isEditing && (
+                                                    <button onClick={() => { setEditForm(selectedItem); setIsEditing(true); }} className="w-full bg-gray-100 text-gray-700 text-xs py-3 rounded-xl border font-bold hover:bg-gray-200">✏️ 업체 정보 수정하기</button>
+                                                )}
+                                            </div>
                                         )}
 
-                                        {isEditing ? (
-                                            <form onSubmit={handleSaveEdit} className="bg-gray-50 p-4 rounded-2xl border space-y-3">
-                                                <h4 className="font-bold text-sm border-b pb-2 mb-2">✏️ 업체 정보 수정</h4>
-                                                <div className="grid grid-cols-2 gap-3 text-xs">
-                                                    <label className="col-span-2">상호명 <input value={editForm.name || ""} onChange={e=>setEditForm({...editForm, name: e.target.value})} className="border p-2 w-full rounded outline-none" required /></label>
-                                                    <label className="col-span-2">사업자등록번호 <input value={editForm.bizNumber || ""} onChange={e=>setEditForm({...editForm, bizNumber: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="고객 증명서 조회용 (숫자만 입력)" /></label>
-                                                    
-                                                    <label>고객 직위 <select value={editForm.clientTitle || "대표"} onChange={e=>setEditForm({...editForm, clientTitle: e.target.value})} className="border p-2 w-full rounded outline-none"><option>대표</option><option>점장</option><option>원장</option><option>소장</option><option>매니저</option></select></label>
-                                                    <label>고객 성명 <input value={editForm.clientName || ""} onChange={e=>setEditForm({...editForm, clientName: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="미입력 시 빈칸 출력" /></label>
-                                                    
-                                                    <label>담당 대원 <select value={editForm.manager || ""} onChange={e=>setEditForm({...editForm, manager: e.target.value})} className="border p-2 w-full rounded outline-none">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
-                                                    <label>평수 <input value={editForm.area || ""} onChange={e=>setEditForm({...editForm, area: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
-                                                    <label className="col-span-2 flex gap-2">
-                                                        <div className="flex-1">시/도 <select value={editForm.gu || "부산"} onChange={e=>setEditForm({...editForm, gu: e.target.value, dong: REGIONS[e.target.value][0]})} className="border p-2 w-full rounded-lg mt-1 bg-white">{Object.keys(REGIONS).map(r=><option key={r}>{r}</option>)}</select></div>
-                                                        <div className="flex-1">구/군 <select value={editForm.dong || ""} onChange={e=>setEditForm({...editForm, dong: e.target.value})} className="border p-2 w-full rounded-lg mt-1 bg-white">{REGIONS[editForm.gu || "부산"].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
-                                                    </label>
-                                                    <label className="col-span-2">상세 주소 <input value={editForm.address || ""} onChange={e=>setEditForm({...editForm, address: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
-                                                    
-                                                    <label className="col-span-2 text-emerald-800 font-bold border-t pt-2 mt-2">운영 및 수금 관리</label>
-                                                    <label>방역시작일 <input type="date" value={editForm.contractStart || ""} onChange={e=>setEditForm({...editForm, contractStart: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
-                                                    <label>계약금액 <input type="number" value={editForm.fee || ""} onChange={e=>setEditForm({...editForm, fee: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
-                                                    <label>방역주기 <select value={editForm.cycle || "월1회"} onChange={e=>setEditForm({...editForm, cycle: e.target.value})} className="border p-2 w-full rounded outline-none">{CYCLES.map(c=><option key={c}>{c}</option>)}</select></label>
-                                                    <label>방역구분 <select value={editForm.serviceType || "정기"} onChange={e=>setEditForm({...editForm, serviceType: e.target.value})} className="border p-2 w-full rounded outline-none"><option>정기</option><option>분기</option><option>무료</option></select></label>
-                                                    <label>결제상태 <select value={editForm.payStatus || "유료"} onChange={e=>setEditForm({...editForm, payStatus: e.target.value})} className="border p-2 w-full rounded outline-none bg-amber-50 font-bold text-amber-900"><option value="유료">유료</option><option value="무료">무료</option><option value="일시중지">일시중지</option><option value="해지">해지</option></select></label>
-                                                    <label>수금 상태 <select value={editForm.collectionStatus || "수금완료"} onChange={e=>setEditForm({...editForm, collectionStatus: e.target.value})} className="border p-2 w-full rounded outline-none font-bold text-rose-700"><option value="수금완료">수금완료</option><option value="미수금">🚨 미수금 발생</option></select></label>
-                                                    
-                                                    {editForm.collectionStatus === "미수금" && (
-                                                        <label className="text-rose-700 font-bold col-span-2">미수금액 (원) <input type="number" value={editForm.uncollectedAmount || ""} onChange={e=>setEditForm({...editForm, uncollectedAmount: e.target.value})} className="border border-rose-300 p-2 w-full rounded outline-none bg-rose-50" placeholder="숫자만 입력" /></label>
-                                                    )}
-                                                    <label className="col-span-2 mt-2">기타 (추가 정보) <textarea value={editForm.etcInfo || ""} onChange={e=>setEditForm({...editForm, etcInfo: e.target.value})} className="border p-2 w-full rounded outline-none h-16 mt-1" placeholder="특이사항 등 자유롭게 입력"></textarea></label>
-                                                </div>
-                                                <div className="flex gap-2 justify-end pt-3">
-                                                    <button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 bg-white border rounded-xl text-xs font-bold">취소</button>
-                                                    <button type="submit" className="px-5 py-2 bg-[#0B5E4D] text-white rounded-xl text-xs font-bold">저장 및 반영</button>
-                                                </div>
-                                            </form>
-                                        ) : (
-                                            <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-xs">
-                                                <div className="col-span-2 border-b pb-2 mb-2"><p className="text-gray-400">사업자등록번호</p><p className="font-mono font-bold text-gray-800 mt-1">{selectedItem.bizNumber || "미등록"}</p></div>
-                                                
-                                                <div><p className="text-gray-400">고객 직위/성명</p><p className="font-bold text-blue-800 mt-1">{selectedItem.clientTitle || "대표"} {selectedItem.clientName || ""}</p></div>
-                                                <div><p className="text-gray-400">담당 대원</p><p className="font-bold mt-1">{selectedItem.manager}</p></div>
-                                                
-                                                <div className="col-span-2"><p className="text-gray-400">연락처 / 주소</p><p className="font-bold mt-1">{selectedItem.phone} <br/><span className="font-normal text-gray-600">{selectedItem.gu} {selectedItem.dong} {selectedItem.address}</span></p></div>
-                                                
-                                                <div className="col-span-2 border-t pt-3 mt-1 grid grid-cols-2 gap-4">
-                                                    <div><p className="text-gray-400">방역시작일</p><p className="font-mono font-bold text-[#0B5E4D] mt-1">{selectedItem.contractStart || "미기입"}</p></div>
-                                                    <div><p className="text-gray-400">방역주기</p><p className="font-bold mt-1 text-gray-800">{selectedItem.cycle || "월1회"}</p></div>
-                                                    <div><p className="text-gray-400">방역구분</p><p className="font-bold mt-1 text-blue-800">{selectedItem.serviceType}</p></div>
-                                                    <div><p className="text-gray-400">결제상태</p><p className="font-bold mt-1 text-[#0B5E4D]">{selectedItem.payStatus}</p></div>
-                                                    <div><p className="text-gray-400">계약금액</p><p className="font-mono font-bold mt-1">₩{Number(String(selectedItem.fee).replace(/,/g, '') || 0).toLocaleString()}</p></div>
+                                        {/* ===================== [2] 수금 내역 탭 ===================== */}
+                                        {detailTab === "payment" && (
+                                            <div className="space-y-4 animate-fade-in">
+                                                {!showPayForm && (
+                                                    <button onClick={() => setShowPayForm(true)} className="w-full bg-amber-50 text-amber-800 font-bold text-xs py-3 rounded-xl border border-amber-200 hover:bg-amber-100">+ 새로운 수금 기록 추가</button>
+                                                )}
+
+                                                {showPayForm && (
+                                                    <form onSubmit={handleAddPayment} className="border p-4 rounded-2xl bg-amber-50/30 shadow-sm space-y-4 text-xs">
+                                                        <p className="font-bold text-amber-900 border-b border-amber-200 pb-2">💰 월별 수금 기록 추가</p>
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <label className="block"><b>수금 월</b><input type="month" value={payForm.month} onChange={e => setPayForm({...payForm, month: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" required /></label>
+                                                            <label className="block"><b>수금 상태</b><select value={payForm.status} onChange={e => setPayForm({...payForm, status: e.target.value})} className={`w-full mt-1 p-2 border rounded-lg outline-none font-bold ${payForm.status === '미수금' ? 'text-red-600' : 'text-emerald-700'}`}><option>수금완료</option><option>미수금</option></select></label>
+                                                            <label className="block col-span-2"><b>결제/미수 금액 (원)</b><input type="number" value={payForm.amount} onChange={e => setPayForm({...payForm, amount: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" required /></label>
+                                                            <label className="block col-span-2"><b>메모 (페이소프트, 계좌입금 등)</b><input type="text" value={payForm.note} onChange={e => setPayForm({...payForm, note: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" placeholder="비고란" /></label>
+                                                        </div>
+                                                        <div className="flex gap-2 justify-end pt-2">
+                                                            <button type="button" onClick={() => setShowPayForm(false)} className="px-4 py-2 border rounded-xl bg-white font-bold">취소</button>
+                                                            <button type="submit" className="px-5 py-2 bg-amber-600 text-white rounded-xl font-bold">기록 추가</button>
+                                                        </div>
+                                                    </form>
+                                                )}
+
+                                                {/* 💡 [연도 필터] 수금 기록 */}
+                                                <div className="flex justify-between items-center bg-gray-50 p-2 rounded-xl border border-gray-100 mt-4">
+                                                    <span className="text-xs font-bold text-gray-500 pl-2">전체 {selectedItem.paymentHistory ? selectedItem.paymentHistory.length : 0}건</span>
+                                                    <select value={paymentYearFilter} onChange={e => setPaymentYearFilter(e.target.value)} className="text-xs p-1.5 border rounded-lg outline-none font-bold text-gray-700">
+                                                        <option value="all">전체 연도</option>
+                                                        {availablePaymentYears.map(y => <option key={y} value={y}>{y}년</option>)}
+                                                    </select>
                                                 </div>
 
-                                                {/* 💡 [핵심] 상세 정보창에서도 통합된 총 미납액 노출 */}
-                                                <div className={`col-span-2 p-3 rounded-lg border ${selectedItemDebt > 0 ? 'bg-rose-50 border-rose-200' : 'bg-white'}`}>
-                                                    <p className="text-gray-500 font-bold mb-1">현재 총 미납액</p>
-                                                    {selectedItemDebt > 0 ? 
-                                                        <p className="font-bold text-rose-700 text-sm">🚨 총 미납 잔액: ₩{selectedItemDebt.toLocaleString()}</p> : 
-                                                        <p className="font-bold text-[#0B5E4D] text-sm">✅ 수금 문제 없음</p>
-                                                    }
-                                                </div>
-                                                <div className="col-span-2 border-t pt-3 mt-1">
-                                                    <p className="text-gray-400">기타 (추가 정보)</p>
-                                                    <p className="font-medium text-gray-800 mt-1 whitespace-pre-wrap">{selectedItem.etcInfo || "등록된 추가 정보가 없습니다."}</p>
+                                                <div className="space-y-3">
+                                                    {filteredPayment.map((p) => (
+                                                        <div key={p.id} className="p-4 bg-white border border-gray-200 rounded-2xl text-xs space-y-1 relative group hover:border-amber-300 transition-all">
+                                                            <button onClick={() => handleDeletePayment(p.id)} className="absolute top-3 right-3 text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
+                                                            <div className="flex justify-between items-center mb-1">
+                                                                <span className={`font-bold text-sm ${p.status === '미수금' ? 'text-red-600' : 'text-blue-600'}`}>💰 {p.status}</span>
+                                                                <span className="font-mono text-gray-400 text-[11px] mr-12">{p.month}</span>
+                                                            </div>
+                                                            <p className="text-[12px] font-bold text-gray-800">금액: ₩{Number(p.amount).toLocaleString()}</p>
+                                                            {p.note && <p className="text-[11px] text-gray-500 pt-1">메모: {p.note}</p>}
+                                                        </div>
+                                                    ))}
+                                                    {filteredPayment.length === 0 && <p className="text-center text-xs text-gray-400 py-6">해당 조건의 수금 기록이 없습니다.</p>}
                                                 </div>
                                             </div>
                                         )}
 
-                                        {!isEditing && (
-                                            <div className="flex gap-2">
-                                                <button onClick={() => {
-                                                    setHistoryForm({ date: TODAY, type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: "이원식" });
-                                                    setEditingHistoryId(null);
-                                                    setShowHistoryForm(!showHistoryForm); setShowPayForm(false);
-                                                }} className="flex-1 bg-emerald-50 text-emerald-800 font-bold text-xs py-2.5 rounded-xl border border-emerald-200">+ 방역 추가</button>
-                                                <button onClick={() => {setShowPayForm(!showPayForm); setShowHistoryForm(false);}} className="flex-1 bg-amber-50 text-amber-800 font-bold text-xs py-2.5 rounded-xl border border-amber-200">+ 수금 추가</button>
-                                                <button onClick={() => { setEditForm(selectedItem); setIsEditing(true); setShowHistoryForm(false); setShowPayForm(false); }} className="flex-1 bg-gray-100 text-gray-700 text-xs py-2.5 rounded-xl border font-bold">✏️ 업체 수정</button>
-                                            </div>
-                                        )}
+                                        {/* ===================== [3] 방역 기록 탭 ===================== */}
+                                        {detailTab === "history" && (
+                                            <div className="space-y-4 animate-fade-in">
+                                                {!showHistoryForm && (
+                                                    <button onClick={() => {
+                                                        setHistoryForm({ date: TODAY, type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: "이원식" });
+                                                        setEditingHistoryId(null);
+                                                        setShowHistoryForm(true);
+                                                    }} className="w-full bg-emerald-50 text-emerald-800 font-bold text-xs py-3 rounded-xl border border-emerald-200 hover:bg-emerald-100">+ 새로운 방역 기록 추가</button>
+                                                )}
 
-                                        {showPayForm && !isEditing && (
-                                            <form onSubmit={handleAddPayment} className="border p-4 rounded-2xl bg-amber-50/30 shadow-sm space-y-4 text-xs animate-fade-in">
-                                                <p className="font-bold text-amber-900 border-b border-amber-200 pb-2">💰 월별 수금 기록 추가</p>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <label className="block"><b>수금 월</b><input type="month" value={payForm.month} onChange={e => setPayForm({...payForm, month: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" required /></label>
-                                                    <label className="block"><b>수금 상태</b><select value={payForm.status} onChange={e => setPayForm({...payForm, status: e.target.value})} className={`w-full mt-1 p-2 border rounded-lg outline-none font-bold ${payForm.status === '미수금' ? 'text-red-600' : 'text-emerald-700'}`}><option>수금완료</option><option>미수금</option></select></label>
-                                                    <label className="block col-span-2"><b>결제/미수 금액 (원)</b><input type="number" value={payForm.amount} onChange={e => setPayForm({...payForm, amount: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" required /></label>
-                                                    <label className="block col-span-2"><b>메모 (페이소프트, 계좌입금 등)</b><input type="text" value={payForm.note} onChange={e => setPayForm({...payForm, note: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" placeholder="비고란" /></label>
-                                                </div>
-                                                <div className="flex gap-2 justify-end pt-2">
-                                                    <button type="button" onClick={() => setShowPayForm(false)} className="px-4 py-2 border rounded-xl bg-white font-bold">취소</button>
-                                                    <button type="submit" className="px-5 py-2 bg-amber-600 text-white rounded-xl font-bold">기록 추가</button>
-                                                </div>
-                                            </form>
-                                        )}
+                                                {showHistoryForm && (
+                                                    <form onSubmit={handleAddHistory} className={`border p-4 rounded-2xl shadow-sm space-y-4 text-xs ${editingHistoryId ? 'bg-blue-50/30 border-blue-200' : 'bg-emerald-50/30 border-emerald-100'}`}>
+                                                        <p className={`font-bold border-b pb-2 ${editingHistoryId ? 'text-blue-800 border-blue-200' : 'text-emerald-800 border-emerald-200'}`}>
+                                                            {editingHistoryId ? "✏️ 현장 방역 기록 수정" : "📝 현장 방역 기록 추가"}
+                                                        </p>
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <label className="block"><b>방역 일자</b><input type="date" value={historyForm.date} onChange={e => setHistoryForm({...historyForm, date: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" /></label>
+                                                            <label className="block"><b>출동대원</b><select value={historyForm.author} onChange={e => setHistoryForm({...historyForm, author: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white">{STAFF.map(s => <option key={s}>{s}</option>)}</select></label>
+                                                        </div>
+                                                        
+                                                        <div>
+                                                            <p className="font-semibold mb-2 text-gray-600">처리 종류 선택 및 추가 (복수 선택)</p>
+                                                            <div className="flex flex-wrap gap-2 mb-3">
+                                                                {["살균", "살충", ...customMethodsList].map(m => {
+                                                                    const isSel = (historyForm.methods || []).includes(m);
+                                                                    const isCustom = !["살균", "살충"].includes(m);
+                                                                    return (
+                                                                        <div key={m} className={`flex items-center rounded-lg border transition-all overflow-hidden ${isSel ? 'bg-[#0B5E4D] text-white font-bold' : 'bg-white text-gray-500 hover:bg-gray-100'}`}>
+                                                                            <button type="button" onClick={() => {
+                                                                                const nMeth = isSel ? historyForm.methods.filter(x => x !== m) : [...(historyForm.methods || []), m];
+                                                                                let nChem = historyForm.chemicals || [];
+                                                                                if (isSel) {
+                                                                                    const tabChems = isCustom ? (customChemsList["기타"] || []) : [...(CHEMICALS_BY_TYPE[m] || []), ...(customChemsList[m] || [])];
+                                                                                    nChem = nChem.filter(c => !tabChems.includes(c));
+                                                                                }
+                                                                                setHistoryForm({...historyForm, methods: nMeth, chemicals: nChem});
+                                                                            }} className="px-4 py-2 text-xs">{m}</button>
+                                                                            {isCustom && <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteCustomMethod(m); }} className={`px-2 py-2 text-[10px] border-l hover:bg-red-500 hover:text-white transition-all ${isSel ? 'border-[#084b3e] text-emerald-200' : 'border-gray-200 text-gray-400'}`}>✕</button>}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                            <div className="flex gap-1.5 bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
+                                                                <input type="text" value={customMethodInput} onChange={e => setCustomMethodInput(e.target.value)} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomMethod(); }}} placeholder="기타 처리 종류 직접 입력 (예: 구서, 포충기)" className="flex-1 p-2 border-none rounded-lg text-xs outline-none" />
+                                                                <button type="button" onClick={handleAddCustomMethod} className="px-3 py-1.5 bg-gray-600 text-white rounded-lg text-xs font-bold shadow-sm hover:opacity-90">종류 추가</button>
+                                                            </div>
+                                                        </div>
 
-                                        {showHistoryForm && !isEditing && (
-                                            <form onSubmit={handleAddHistory} className={`border p-4 rounded-2xl shadow-sm space-y-4 text-xs animate-fade-in ${editingHistoryId ? 'bg-blue-50/30 border-blue-200' : 'bg-white'}`}>
-                                                <p className={`font-bold border-b pb-2 ${editingHistoryId ? 'text-blue-800 border-blue-200' : 'text-gray-700'}`}>
-                                                    {editingHistoryId ? "✏️ 현장 방역 기록 수정" : "📝 현장 방역 기록 추가"}
-                                                </p>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <label className="block"><b>방역 일자</b><input type="date" value={historyForm.date} onChange={e => setHistoryForm({...historyForm, date: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none" /></label>
-                                                    <label className="block"><b>출동대원</b><select value={historyForm.author} onChange={e => setHistoryForm({...historyForm, author: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none">{STAFF.map(s => <option key={s}>{s}</option>)}</select></label>
-                                                </div>
-                                                
-                                                <div>
-                                                    <p className="font-semibold mb-2 text-gray-600">처리 종류 선택 및 추가 (복수 선택)</p>
-                                                    <div className="flex flex-wrap gap-2 mb-3">
-                                                        {["살균", "살충", ...customMethodsList].map(m => {
-                                                            const isSel = (historyForm.methods || []).includes(m);
-                                                            const isCustom = !["살균", "살충"].includes(m);
-                                                            return (
-                                                                <div key={m} className={`flex items-center rounded-lg border transition-all overflow-hidden ${isSel ? 'bg-[#0B5E4D] text-white font-bold' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
-                                                                    <button type="button" onClick={() => {
-                                                                        const nMeth = isSel ? historyForm.methods.filter(x => x !== m) : [...(historyForm.methods || []), m];
-                                                                        let nChem = historyForm.chemicals || [];
-                                                                        if (isSel) {
-                                                                            const tabChems = isCustom ? (customChemsList["기타"] || []) : [...(CHEMICALS_BY_TYPE[m] || []), ...(customChemsList[m] || [])];
-                                                                            nChem = nChem.filter(c => !tabChems.includes(c));
-                                                                        }
-                                                                        setHistoryForm({...historyForm, methods: nMeth, chemicals: nChem});
-                                                                    }} className="px-4 py-2 text-xs">{m}</button>
-                                                                    {isCustom && <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteCustomMethod(m); }} className={`px-2 py-2 text-[10px] border-l hover:bg-red-500 hover:text-white transition-all ${isSel ? 'border-[#084b3e] text-emerald-200' : 'border-gray-200 text-gray-400'}`}>✕</button>}
+                                                        {(historyForm.methods || []).includes("살균") && (
+                                                            <div className="p-3 bg-white border border-emerald-100 rounded-xl shadow-sm">
+                                                                <p className="font-bold text-emerald-800 mb-2">🦠 살균 약품 선택 및 직접 입력</p>
+                                                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                                                    {(CHEMICALS_BY_TYPE["살균"] || []).map(c => {
+                                                                        const hasChem = (historyForm.chemicals || []).includes(c);
+                                                                        return <button type="button" key={c} onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-all ${hasChem ? 'bg-emerald-600 text-white border-emerald-700 font-bold' : 'bg-gray-50 text-gray-500 hover:bg-emerald-50'}`}>{c}</button>
+                                                                    })}
+                                                                    {(customChemsList["살균"] || []).map(c => {
+                                                                        const hasChem = (historyForm.chemicals || []).includes(c);
+                                                                        return (
+                                                                            <div key={c} className={`flex items-center rounded-lg border transition-all overflow-hidden ${hasChem ? 'bg-emerald-600 text-white border-emerald-700 font-bold' : 'bg-gray-50 text-gray-500 hover:bg-emerald-50'}`}>
+                                                                                <button type="button" onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} className="px-2.5 py-1.5 text-[11px] font-medium">{c}</button>
+                                                                                <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteCustomChem("살균", c); }} className={`px-1.5 py-1.5 text-[10px] border-l hover:bg-red-500 hover:text-white transition-all ${hasChem ? 'border-emerald-500 text-emerald-200' : 'border-gray-200 text-gray-400'}`}>✕</button>
+                                                                            </div>
+                                                                        );
+                                                                    })}
                                                                 </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                    <div className="flex gap-1.5 bg-gray-50 p-2 rounded-xl border border-gray-100">
-                                                        <input type="text" value={customMethodInput} onChange={e => setCustomMethodInput(e.target.value)} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomMethod(); }}} placeholder="기타 처리 종류 직접 입력 (예: 구서, 포충기)" className="flex-1 p-2 border rounded-lg text-xs outline-none bg-white shadow-sm" />
-                                                        <button type="button" onClick={handleAddCustomMethod} className="px-3 py-1.5 bg-gray-600 text-white rounded-lg text-xs font-bold shadow-sm hover:opacity-90">종류 추가</button>
-                                                    </div>
+                                                                <div className="flex gap-1.5">
+                                                                    <input type="text" value={customChemInput["살균"] || ""} onChange={e => setCustomChemInput({...customChemInput, "살균": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("살균"); }}} placeholder="기타 살균 약품 직접 입력 후 추가 버튼 클릭" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm bg-gray-50" />
+                                                                    <button type="button" onClick={() => handleAddCustomChem("살균")} className="px-3 py-1.5 bg-emerald-700 text-white rounded-lg text-[11px] font-bold shadow-sm hover:opacity-90">추가</button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {(historyForm.methods || []).includes("살충") && (
+                                                            <div className="p-3 bg-white border border-amber-100 rounded-xl shadow-sm">
+                                                                <p className="font-bold text-amber-800 mb-2">🪳 살충 약품 선택 및 직접 입력</p>
+                                                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                                                    {(CHEMICALS_BY_TYPE["살충"] || []).map(c => {
+                                                                        const hasChem = (historyForm.chemicals || []).includes(c);
+                                                                        return <button type="button" key={c} onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-all ${hasChem ? 'bg-amber-600 text-white border-amber-700 font-bold' : 'bg-gray-50 text-gray-500 hover:bg-amber-50'}`}>{c}</button>
+                                                                    })}
+                                                                    {(customChemsList["살충"] || []).map(c => {
+                                                                        const hasChem = (historyForm.chemicals || []).includes(c);
+                                                                        return (
+                                                                            <div key={c} className={`flex items-center rounded-lg border transition-all overflow-hidden ${hasChem ? 'bg-amber-600 text-white border-amber-700 font-bold' : 'bg-gray-50 text-gray-500 hover:bg-amber-50'}`}>
+                                                                                <button type="button" onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} className="px-2.5 py-1.5 text-[11px] font-medium">{c}</button>
+                                                                                <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteCustomChem("살충", c); }} className={`px-1.5 py-1.5 text-[10px] border-l hover:bg-red-500 hover:text-white transition-all ${hasChem ? 'border-amber-500 text-amber-200' : 'border-gray-200 text-gray-400'}`}>✕</button>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                                <div className="flex gap-1.5">
+                                                                    <input type="text" value={customChemInput["살충"] || ""} onChange={e => setCustomChemInput({...customChemInput, "살충": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("살충"); }}} placeholder="기타 살충 약품 직접 입력 후 추가 버튼 클릭" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm bg-gray-50" />
+                                                                    <button type="button" onClick={() => handleAddCustomChem("살충")} className="px-3 py-1.5 bg-amber-700 text-white rounded-lg text-[11px] font-bold shadow-sm hover:opacity-90">추가</button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {((historyForm.methods || []).some(m => !["살균", "살충"].includes(m))) && (
+                                                            <div className="p-3 bg-white border border-blue-100 rounded-xl shadow-sm">
+                                                                <p className="font-bold text-blue-800 mb-2">🏷️ 기타 방식 약품 선택 및 직접 입력</p>
+                                                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                                                    {(customChemsList["기타"] || []).map(c => {
+                                                                        const hasChem = (historyForm.chemicals || []).includes(c);
+                                                                        return (
+                                                                            <div key={c} className={`flex items-center rounded-lg border transition-all overflow-hidden ${hasChem ? 'bg-blue-600 text-white border-blue-700 font-bold' : 'bg-gray-50 text-gray-500 hover:bg-blue-50'}`}>
+                                                                                <button type="button" onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} className="px-2.5 py-1.5 text-[11px] font-medium">{c}</button>
+                                                                                <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteCustomChem("기타", c); }} className={`px-1.5 py-1.5 text-[10px] border-l hover:bg-red-500 hover:text-white transition-all ${hasChem ? 'border-blue-500 text-blue-200' : 'border-gray-200 text-gray-400'}`}>✕</button>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                                <div className="flex gap-1.5">
+                                                                    <input type="text" value={customChemInput["기타"] || ""} onChange={e => setCustomChemInput({...customChemInput, "기타": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("기타"); }}} placeholder="기타 방식에 사용된 약품/장비 등 입력" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm bg-gray-50" />
+                                                                    <button type="button" onClick={() => handleAddCustomChem("기타")} className="px-3 py-1.5 bg-blue-700 text-white rounded-lg text-[11px] font-bold shadow-sm hover:opacity-90">추가</button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        
+                                                        <div className="flex gap-2 justify-end pt-2">
+                                                            <button type="button" onClick={() => {setShowHistoryForm(false); setEditingHistoryId(null);}} className="px-4 py-2 border rounded-xl bg-white font-bold shadow-sm">취소</button>
+                                                            <button type="submit" className={`px-5 py-2 text-white rounded-xl font-bold shadow-sm ${editingHistoryId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#0B5E4D] hover:bg-[#084b3e]'}`}>
+                                                                {editingHistoryId ? "수정 사항 저장" : "기록 추가"}
+                                                            </button>
+                                                        </div>
+                                                    </form>
+                                                )}
+
+                                                {/* 💡 [연도 필터] 방역 기록 */}
+                                                <div className="flex justify-between items-center bg-gray-50 p-2 rounded-xl border border-gray-100 mt-4">
+                                                    <span className="text-xs font-bold text-gray-500 pl-2">전체 {selectedItem.history ? selectedItem.history.length : 0}건</span>
+                                                    <select value={historyYearFilter} onChange={e => setHistoryYearFilter(e.target.value)} className="text-xs p-1.5 border rounded-lg outline-none font-bold text-gray-700">
+                                                        <option value="all">전체 연도</option>
+                                                        {availableHistoryYears.map(y => <option key={y} value={y}>{y}년</option>)}
+                                                    </select>
                                                 </div>
 
-                                                {(historyForm.methods || []).includes("살균") && (
-                                                    <div className="p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl">
-                                                        <p className="font-bold text-emerald-800 mb-2">🦠 살균 약품 선택 및 직접 입력</p>
-                                                        <div className="flex flex-wrap gap-1.5 mb-3">
-                                                            {(CHEMICALS_BY_TYPE["살균"] || []).map(c => {
-                                                                const hasChem = (historyForm.chemicals || []).includes(c);
-                                                                return <button type="button" key={c} onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-all ${hasChem ? 'bg-emerald-600 text-white border-emerald-700 font-bold' : 'bg-white text-gray-500 hover:bg-emerald-50'}`}>{c}</button>
-                                                            })}
-                                                            {(customChemsList["살균"] || []).map(c => {
-                                                                const hasChem = (historyForm.chemicals || []).includes(c);
-                                                                return (
-                                                                    <div key={c} className={`flex items-center rounded-lg border transition-all overflow-hidden ${hasChem ? 'bg-emerald-600 text-white border-emerald-700 font-bold' : 'bg-white text-gray-500 hover:bg-emerald-50'}`}>
-                                                                        <button type="button" onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} className="px-2.5 py-1.5 text-[11px] font-medium">{c}</button>
-                                                                        <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteCustomChem("살균", c); }} className={`px-1.5 py-1.5 text-[10px] border-l hover:bg-red-500 hover:text-white transition-all ${hasChem ? 'border-emerald-500 text-emerald-200' : 'border-gray-200 text-gray-400'}`}>✕</button>
-                                                                    </div>
-                                                                );
-                                                            })}
+                                                <div className="space-y-3">
+                                                    {filteredHistory.map((h) => (
+                                                        <div key={h.id} className={`p-4 border rounded-2xl text-xs space-y-1 relative group transition-all ${editingHistoryId === h.id ? 'bg-blue-50/50 border-blue-300' : 'bg-white border-gray-200 hover:border-[#0B5E4D]'}`}>
+                                                            <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button onClick={() => handleEditHistoryInit(h)} className="text-gray-500 hover:text-blue-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">✏️ 수정</button>
+                                                                <button onClick={() => handleDeleteHistory(h.id)} className="text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
+                                                            </div>
+                                                            <div className="flex justify-between items-center mb-1 pr-24">
+                                                                <span className="font-bold text-emerald-800 text-sm">✅ {h.type} 완료</span>
+                                                                <span className="font-mono text-gray-400 text-[11px]">{h.date}</span>
+                                                            </div>
+                                                            {h.methods && h.methods.length > 0 && <p className="text-[11px] text-gray-700 font-bold">🔨 방식: {h.methods.join(", ")}</p>}
+                                                            {h.chemicals && h.chemicals.length > 0 && <p className="text-[11px] text-gray-600 font-medium">💊 약품/장비: {h.chemicals.join(", ")}</p>}
+                                                            <p className="text-[10px] text-gray-400 pt-1">출동대원: {h.author}</p>
+                                                            {h.type === "방역" && (
+                                                                <button onClick={() => { 
+                                                                    setCertEntry(h); 
+                                                                    const dateStr = h.date || TODAY;
+                                                                    const yy = dateStr.split('-')[0].slice(2);
+                                                                    const mm = dateStr.split('-')[1] || "01";
+                                                                    const fixedNum = String(h.id).slice(-4).padStart(4, '0'); 
+                                                                    setCertNumber(`제 ${yy}-${mm}-${fixedNum} 호`);
+                                                                    setIsCertOpen(true); 
+                                                                }} className="mt-3 w-full bg-white border border-emerald-200 text-emerald-800 text-xs py-2 rounded-xl font-bold shadow-sm hover:bg-emerald-50 transition-all">📄 이 날짜로 소독증명서 발급</button>
+                                                            )}
                                                         </div>
-                                                        <div className="flex gap-1.5">
-                                                            <input type="text" value={customChemInput["살균"] || ""} onChange={e => setCustomChemInput({...customChemInput, "살균": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("살균"); }}} placeholder="기타 살균 약품 직접 입력 후 추가 버튼 클릭" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm" />
-                                                            <button type="button" onClick={() => handleAddCustomChem("살균")} className="px-3 py-1.5 bg-emerald-700 text-white rounded-lg text-[11px] font-bold shadow-sm hover:opacity-90">추가</button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {(historyForm.methods || []).includes("살충") && (
-                                                    <div className="p-3 bg-amber-50/50 border border-amber-100 rounded-xl">
-                                                        <p className="font-bold text-amber-800 mb-2">🪳 살충 약품 선택 및 직접 입력</p>
-                                                        <div className="flex flex-wrap gap-1.5 mb-3">
-                                                            {(CHEMICALS_BY_TYPE["살충"] || []).map(c => {
-                                                                const hasChem = (historyForm.chemicals || []).includes(c);
-                                                                return <button type="button" key={c} onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-all ${hasChem ? 'bg-amber-600 text-white border-amber-700 font-bold' : 'bg-white text-gray-500 hover:bg-amber-50'}`}>{c}</button>
-                                                            })}
-                                                            {(customChemsList["살충"] || []).map(c => {
-                                                                const hasChem = (historyForm.chemicals || []).includes(c);
-                                                                return (
-                                                                    <div key={c} className={`flex items-center rounded-lg border transition-all overflow-hidden ${hasChem ? 'bg-amber-600 text-white border-amber-700 font-bold' : 'bg-white text-gray-500 hover:bg-amber-50'}`}>
-                                                                        <button type="button" onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} className="px-2.5 py-1.5 text-[11px] font-medium">{c}</button>
-                                                                        <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteCustomChem("살충", c); }} className={`px-1.5 py-1.5 text-[10px] border-l hover:bg-red-500 hover:text-white transition-all ${hasChem ? 'border-amber-500 text-amber-200' : 'border-gray-200 text-gray-400'}`}>✕</button>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                        <div className="flex gap-1.5">
-                                                            <input type="text" value={customChemInput["살충"] || ""} onChange={e => setCustomChemInput({...customChemInput, "살충": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("살충"); }}} placeholder="기타 살충 약품 직접 입력 후 추가 버튼 클릭" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm" />
-                                                            <button type="button" onClick={() => handleAddCustomChem("살충")} className="px-3 py-1.5 bg-amber-700 text-white rounded-lg text-[11px] font-bold shadow-sm hover:opacity-90">추가</button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                
-                                                {((historyForm.methods || []).some(m => !["살균", "살충"].includes(m))) && (
-                                                    <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl">
-                                                        <p className="font-bold text-blue-800 mb-2">🏷️ 기타 방식 약품 선택 및 직접 입력</p>
-                                                        <div className="flex flex-wrap gap-1.5 mb-3">
-                                                            {(customChemsList["기타"] || []).map(c => {
-                                                                const hasChem = (historyForm.chemicals || []).includes(c);
-                                                                return (
-                                                                    <div key={c} className={`flex items-center rounded-lg border transition-all overflow-hidden ${hasChem ? 'bg-blue-600 text-white border-blue-700 font-bold' : 'bg-white text-gray-500 hover:bg-blue-50'}`}>
-                                                                        <button type="button" onClick={() => setHistoryForm({...historyForm, chemicals: hasChem ? historyForm.chemicals.filter(x => x !== c) : [...historyForm.chemicals, c]})} className="px-2.5 py-1.5 text-[11px] font-medium">{c}</button>
-                                                                        <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteCustomChem("기타", c); }} className={`px-1.5 py-1.5 text-[10px] border-l hover:bg-red-500 hover:text-white transition-all ${hasChem ? 'border-blue-500 text-blue-200' : 'border-gray-200 text-gray-400'}`}>✕</button>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                        <div className="flex gap-1.5">
-                                                            <input type="text" value={customChemInput["기타"] || ""} onChange={e => setCustomChemInput({...customChemInput, "기타": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("기타"); }}} placeholder="기타 방식에 사용된 약품/장비 등 입력" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm" />
-                                                            <button type="button" onClick={() => handleAddCustomChem("기타")} className="px-3 py-1.5 bg-blue-700 text-white rounded-lg text-[11px] font-bold shadow-sm hover:opacity-90">추가</button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                
-                                                <div className="flex gap-2 justify-end pt-2">
-                                                    <button type="button" onClick={() => {setShowHistoryForm(false); setEditingHistoryId(null);}} className="px-4 py-2 border rounded-xl bg-white font-bold">취소</button>
-                                                    <button type="submit" className={`px-5 py-2 text-white rounded-xl font-bold ${editingHistoryId ? 'bg-blue-600' : 'bg-[#0B5E4D]'}`}>
-                                                        {editingHistoryId ? "수정 사항 저장" : "기록 추가"}
-                                                    </button>
+                                                    ))}
+                                                    {filteredHistory.length === 0 && <p className="text-center text-xs text-gray-400 py-6">해당 조건의 방역 기록이 없습니다.</p>}
                                                 </div>
-                                            </form>
+                                            </div>
                                         )}
-
-                                        <div className="space-y-3 pt-4 border-t">
-                                            <h4 className="text-xs font-bold text-gray-500">📋 가맹점 통합 히스토리 (방역 / 수금)</h4>
-                                            
-                                            {(selectedItem.paymentHistory || []).map((p) => (
-                                                <div key={p.id} className="p-4 bg-amber-50/30 border border-amber-100 rounded-2xl text-xs space-y-1 relative group">
-                                                    <button onClick={() => handleDeletePayment(p.id)} className="absolute top-3 right-3 text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm">🗑️ 삭제</button>
-                                                    <div className="flex justify-between items-center mb-1">
-                                                        <span className={`font-bold text-sm ${p.status === '미수금' ? 'text-red-600' : 'text-blue-600'}`}>💰 {p.status}</span>
-                                                        <span className="font-mono text-gray-400 text-[11px] mr-12">{p.month}</span>
-                                                    </div>
-                                                    <p className="text-[12px] font-bold text-gray-800">금액: ₩{Number(p.amount).toLocaleString()}</p>
-                                                    {p.note && <p className="text-[11px] text-gray-500 pt-1">메모: {p.note}</p>}
-                                                </div>
-                                            ))}
-
-                                            {(selectedItem.history || []).map((h) => (
-                                                <div key={h.id} className={`p-4 border rounded-2xl text-xs space-y-1 relative group ${editingHistoryId === h.id ? 'bg-blue-50/50 border-blue-300' : 'bg-gray-50'}`}>
-                                                    <div className="absolute top-3 right-3 flex gap-1">
-                                                        <button onClick={() => handleEditHistoryInit(h)} className="text-gray-500 hover:text-blue-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">✏️ 수정</button>
-                                                        <button onClick={() => handleDeleteHistory(h.id)} className="text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
-                                                    </div>
-                                                    <div className="flex justify-between items-center mb-1 pr-24">
-                                                        <span className="font-bold text-emerald-800 text-sm">✅ {h.type} 완료</span>
-                                                        <span className="font-mono text-gray-400 text-[11px]">{h.date}</span>
-                                                    </div>
-                                                    {h.methods && h.methods.length > 0 && <p className="text-[11px] text-gray-700 font-bold">🔨 방식: {h.methods.join(", ")}</p>}
-                                                    {h.chemicals && h.chemicals.length > 0 && <p className="text-[11px] text-gray-600 font-medium">💊 약품/장비: {h.chemicals.join(", ")}</p>}
-                                                    <p className="text-[10px] text-gray-400 pt-1">출동대원: {h.author}</p>
-                                                    {h.type === "방역" && (
-                                                        <button onClick={() => { 
-                                                            setCertEntry(h); 
-                                                            const dateStr = h.date || TODAY;
-                                                            const yy = dateStr.split('-')[0].slice(2);
-                                                            const mm = dateStr.split('-')[1] || "01";
-                                                            const fixedNum = String(h.id).slice(-4).padStart(4, '0'); 
-                                                            setCertNumber(`제 ${yy}-${mm}-${fixedNum} 호`);
-                                                            setIsCertOpen(true); 
-                                                        }} className="mt-3 w-full bg-white border border-emerald-200 text-emerald-800 text-xs py-2 rounded-xl font-bold shadow-sm hover:bg-emerald-50 transition-all">📄 이 날짜로 소독증명서 발급</button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                            
-                                            {(!selectedItem.history || selectedItem.history.length === 0) && (!selectedItem.paymentHistory || selectedItem.paymentHistory.length === 0) && (
-                                                <p className="text-center text-xs text-gray-400 py-4">저장된 히스토리가 없습니다.</p>
-                                            )}
-                                        </div>
                                     </div>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* 소독증명서 출력 (관리자 화면용) - 글자 완전 삭제 */}
+                    {/* 소독증명서 출력 모달 */}
                     {isCertOpen && selectedItem && certEntry && (
                         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:bg-white print:p-0">
                             <div className="bg-white rounded-3xl p-8 max-w-3xl w-full max-h-[96vh] overflow-y-auto my-auto shadow-2xl print:shadow-none print:w-full print:h-auto print:max-h-none print:overflow-visible">
@@ -722,15 +781,12 @@
                                             </tr>
                                             <tr>
                                                 <td className="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" colSpan="2">관리(운영)자 확인</td>
-                                                
-                                                {/* 💡 '(서명 또는 인)' 문구 완전히 삭제 */}
                                                 <td className="border border-black p-4 text-[14px]" colSpan="3">
                                                     <div className="flex justify-between pr-8">
-                                                        <span>직위 : 담당자</span>
-                                                        <span>성명 : {certEntry.author || "이원식"}</span>
+                                                        <span>직위 : {selectedItem.clientTitle || "대표"}</span>
+                                                        <span>성명 : {selectedItem.clientName || ""}</span>
                                                     </div>
                                                 </td>
-
                                             </tr>
                                             <tr>
                                                 <td className="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" colSpan="2">소독기간</td>
