@@ -53,15 +53,15 @@
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
                             setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v29", JSON.stringify(fetchedData));
+                            localStorage.setItem("mstc_crm_data_v30", JSON.stringify(fetchedData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v29");
+                            const local = localStorage.getItem("mstc_crm_data_v30");
                             if(local) setData(JSON.parse(local));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v29");
+                        const local = localStorage.getItem("mstc_crm_data_v30");
                         if(local) setData(JSON.parse(local));
                         setLoading(false);
                     });
@@ -69,7 +69,7 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v29", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v30", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
@@ -97,7 +97,9 @@
             const [regCity, setRegCity] = useState("부산");
 
             const [showHistoryForm, setShowHistoryForm] = useState(false);
-            const [historyForm, setHistoryForm] = useState({ date: TODAY, startTime: "", endTime: "", type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: "이원식" });
+            
+            // 💡 [수정] startTime, endTime 대신 단일 time 값만 관리
+            const [historyForm, setHistoryForm] = useState({ date: TODAY, time: "", type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: "이원식" });
             const [editingHistoryId, setEditingHistoryId] = useState(null);
 
             const [showPayForm, setShowPayForm] = useState(false);
@@ -231,10 +233,11 @@
                 let updatedHistoryList;
                 if (editingHistoryId) {
                     updatedHistoryList = selectedItem.history.map(h => 
-                        h.id === editingHistoryId ? { ...h, date: historyForm.date, startTime: historyForm.startTime, endTime: historyForm.endTime, type: historyForm.type, author: historyForm.author, content: contentStr, methods: historyForm.type === "방역" ? historyForm.methods : [], chemicals: historyForm.type === "방역" ? historyForm.chemicals : [] } : h
+                        // 💡 단일 time 필드로 저장
+                        h.id === editingHistoryId ? { ...h, date: historyForm.date, time: historyForm.time, type: historyForm.type, author: historyForm.author, content: contentStr, methods: historyForm.type === "방역" ? historyForm.methods : [], chemicals: historyForm.type === "방역" ? historyForm.chemicals : [] } : h
                     );
                 } else {
-                    const newLog = { id: Date.now(), date: historyForm.date, startTime: historyForm.startTime, endTime: historyForm.endTime, type: historyForm.type, author: historyForm.author, content: contentStr, methods: historyForm.type === "방역" ? historyForm.methods : [], chemicals: historyForm.type === "방역" ? historyForm.chemicals : [] };
+                    const newLog = { id: Date.now(), date: historyForm.date, time: historyForm.time, type: historyForm.type, author: historyForm.author, content: contentStr, methods: historyForm.type === "방역" ? historyForm.methods : [], chemicals: historyForm.type === "방역" ? historyForm.chemicals : [] };
                     updatedHistoryList = [newLog, ...(selectedItem.history || [])];
                 }
                 const updatedItem = { ...selectedItem, history: updatedHistoryList };
@@ -243,7 +246,8 @@
             };
 
             const handleEditHistoryInit = (h) => {
-                setHistoryForm({ date: h.date, startTime: h.startTime || "", endTime: h.endTime || "", type: h.type, author: h.author || "이원식", methods: h.methods || [], chemicals: h.chemicals || [], note: h.type === "방역" ? "" : h.content });
+                // 💡 과거 데이터(startTime)와 호환되도록 처리
+                setHistoryForm({ date: h.date, time: h.time || h.startTime || "", type: h.type, author: h.author || "이원식", methods: h.methods || [], chemicals: h.chemicals || [], note: h.type === "방역" ? "" : h.content });
                 setEditingHistoryId(h.id); setShowHistoryForm(true); setShowPayForm(false); setIsEditing(false);
             };
 
@@ -320,7 +324,6 @@
                     .reduce((sum, p) => sum + (parseInt(String(p.amount || "0").replace(/,/g, ''), 10) || 0), 0);
             }, [selectedItem]);
 
-            // 💡 [핵심 추가] 선택된 업체의 횟수 카운팅
             const selectedItemPestCount = selectedItem ? (selectedItem.history || []).filter(h => h.type === '방역').length : 0;
             const selectedItemPayCount = selectedItem ? (selectedItem.paymentHistory || []).length : 0;
 
@@ -502,7 +505,6 @@
                                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                                                 {selectedItem.tab === 'active' ? '🟢' : selectedItem.tab === 'prospect' ? '🟡' : selectedItem.tab === 'paused' ? '🟠' : '🔴'} {selectedItem.name}
                                             </h3>
-                                            {/* 💡 [핵심] 상시 노출되는 밸런스 카운터 */}
                                             <div className="flex gap-2 mt-2">
                                                 <span className="text-[11px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">🔨 누적 방역: {selectedItemPestCount}회</span>
                                                 <span className="text-[11px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold">💰 누적 수금: {selectedItemPayCount}개월 치</span>
@@ -559,7 +561,9 @@
                                                             <label className="col-span-2 text-emerald-800 font-bold border-t pt-2 mt-2">🛠️ 필수 관리 항목</label>
                                                             <label>방역시작일 <input type="date" value={editForm.contractStart || ""} onChange={e=>setEditForm({...editForm, contractStart: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
                                                             <label>평수(면적) <input value={editForm.area || ""} onChange={e=>setEditForm({...editForm, area: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
+                                                            
                                                             <label>계약금액 <input type="number" step="5000" value={editForm.fee || ""} onChange={e=>setEditForm({...editForm, fee: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
+                                                            
                                                             <label>방역주기 <select value={editForm.cycle || "월1회"} onChange={e=>setEditForm({...editForm, cycle: e.target.value})} className="border p-2 w-full rounded outline-none">{CYCLES.map(c=><option key={c}>{c}</option>)}</select></label>
                                                             <label>방역구분 <select value={editForm.serviceType || "정기"} onChange={e=>setEditForm({...editForm, serviceType: e.target.value})} className="border p-2 w-full rounded outline-none"><option>정기</option><option>분기</option><option>무료</option></select></label>
                                                             <label>결제방식 <select value={editForm.payMethod || "계좌이체"} onChange={e=>setEditForm({...editForm, payMethod: e.target.value})} className="border p-2 w-full rounded outline-none"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>기타</option></select></label>
@@ -679,7 +683,7 @@
 
                                                 <div className="space-y-3">
                                                     {filteredPayment.map((p) => (
-                                                        <div key={p.id} className={`p-4 border rounded-2xl text-xs space-y-1 relative group transition-all ${editingPayId === p.id ? 'bg-indigo-50/50 border-indigo-300' : 'bg-white border-gray-200 hover:border-amber-300'}`}>
+                                                        <div key={p.id} className={`p-4 bg-white border border-gray-200 rounded-2xl text-xs space-y-1 relative group hover:border-amber-300 transition-all`}>
                                                             <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <button onClick={() => handleEditPayInit(p)} className="text-gray-500 hover:text-indigo-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">✏️ 수정</button>
                                                                 <button onClick={() => handleDeletePayment(p.id)} className="text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
@@ -705,7 +709,8 @@
                                             <div className="space-y-4 animate-fade-in">
                                                 {!showHistoryForm && (
                                                     <button onClick={() => {
-                                                        setHistoryForm({ date: TODAY, startTime: "", endTime: "", type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: "이원식" });
+                                                        // 💡 [수정] 새 기록 폼을 열 때 time만 빈칸으로 세팅
+                                                        setHistoryForm({ date: TODAY, time: "", type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: "이원식" });
                                                         setEditingHistoryId(null);
                                                         setShowHistoryForm(true);
                                                     }} className="w-full bg-emerald-50 text-emerald-800 font-bold text-xs py-3 rounded-xl border border-emerald-200 hover:bg-emerald-100">+ 새로운 방역 기록 추가</button>
@@ -721,9 +726,9 @@
                                                             <label className="block"><b>출동대원</b><select value={historyForm.author} onChange={e => setHistoryForm({...historyForm, author: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white">{STAFF.map(s => <option key={s}>{s}</option>)}</select></label>
                                                         </div>
                                                         
-                                                        <div className="grid grid-cols-2 gap-3 mt-3 bg-gray-50 border p-3 rounded-xl">
-                                                            <label className="block text-gray-700"><b>⏰ 시작 시간</b><input type="time" value={historyForm.startTime} onChange={e => setHistoryForm({...historyForm, startTime: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white shadow-sm" /></label>
-                                                            <label className="block text-gray-700"><b>⏰ 종료 시간</b><input type="time" value={historyForm.endTime} onChange={e => setHistoryForm({...historyForm, endTime: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white shadow-sm" /></label>
+                                                        {/* 💡 [수정] 시작/종료 복잡한 시간을 하나로 통합 */}
+                                                        <div className="mt-3 bg-gray-50 border p-3 rounded-xl">
+                                                            <label className="block text-gray-700"><b>⏰ 방문/진행 시간</b><input type="time" value={historyForm.time || ""} onChange={e => setHistoryForm({...historyForm, time: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white shadow-sm" /></label>
                                                         </div>
 
                                                         <div>
@@ -852,7 +857,10 @@
                                                                 <span className="font-bold text-emerald-800 text-sm">✅ {h.type} 완료</span>
                                                                 <span className="font-mono text-gray-400 text-[11px]">{h.date}</span>
                                                             </div>
-                                                            {h.startTime && h.endTime && <p className="text-[11px] text-gray-700 font-bold mt-1">⏰ 진행시간: {h.startTime} ~ {h.endTime}</p>}
+                                                            
+                                                            {/* 💡 [수정] 방역 시간(단일 필드) 및 과거 호환성 적용 */}
+                                                            {(h.time || h.startTime) && <p className="text-[11px] text-gray-700 font-bold mt-1">⏰ 진행시간: {h.time || h.startTime}</p>}
+                                                            
                                                             {h.methods && h.methods.length > 0 && <p className="text-[11px] text-gray-700 font-bold mt-1">🔨 방식: {h.methods.join(", ")}</p>}
                                                             {h.chemicals && h.chemicals.length > 0 && <p className="text-[11px] text-gray-600 font-medium">💊 약품/장비: {h.chemicals.join(", ")}</p>}
                                                             <p className="text-[10px] text-gray-400 pt-1">출동대원: {h.author}</p>
@@ -879,7 +887,7 @@
                         </div>
                     </div>
 
-                    {/* 소독증명서 출력 (관리자 화면용) */}
+                    {/* 소독증명서 출력 모달 */}
                     {isCertOpen && selectedItem && certEntry && (
                         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:bg-white print:p-0">
                             <div className="bg-white rounded-3xl p-8 max-w-3xl w-full max-h-[96vh] overflow-y-auto my-auto shadow-2xl print:shadow-none print:w-full print:h-auto print:max-h-none print:overflow-visible">
