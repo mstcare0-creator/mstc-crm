@@ -28,15 +28,11 @@
 
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyJUCIKiumzq3QbFjZzSQq6mKWdw03AXCja8oH2mClGwUN6cv8CKJehdJLlkNHACqEY/exec";
         const CERT_ISSUER = { name: "주)모바일솔루션즈", address: "부산 강서구 명지국제2로28번길 24, 620호", reps: "구승재, 구태원" };
-        
-        // 💡 실제 법인 인감 도장 이미지 주소
         const COMPANY_SEAL_URL = "https://mstcare0-creator.github.io/mstc-crm/seal.png"; 
 
         function App() {
             const [bizNum, setBizNum] = useState("");
             const [clientData, setClientData] = useState(null);
-            
-            // 💡 과거 기록을 담아둘 새로운 상태 추가
             const [availableHistories, setAvailableHistories] = useState([]);
             const [selectedHistory, setSelectedHistory] = useState(null);
             
@@ -45,11 +41,8 @@
             const [certNumber, setCertNumber] = useState(""); 
             const [sealImgFailed, setSealImgFailed] = useState(false); 
 
-            // 💡 특정 기록을 선택했을 때 화면과 증명서 번호를 업데이트하는 함수
             const updateSelectedHistory = (historyObj) => {
                 setSelectedHistory(historyObj);
-                
-                // 해당 방역 기록의 고유 ID를 활용해 고정된 4자리 번호 생성
                 const yy = historyObj.date.split('-')[0].slice(2);
                 const mm = historyObj.date.split('-')[1];
                 const fixedNum = String(historyObj.id).slice(-4).padStart(4, '0'); 
@@ -69,15 +62,14 @@
                         const found = data.find(d => d.bizNumber && d.bizNumber.replace(/-/g, "").trim() === cleanInput);
                         
                         if(found) {
-                            // 방역 기록 전체를 모아서 최신순 정렬
                             const histories = (found.history || [])
                                 .filter(h => h.type === "방역")
                                 .sort((a,b) => new Date(b.date) - new Date(a.date));
                                 
                             if(histories.length > 0) {
                                 setClientData(found);
-                                setAvailableHistories(histories); // 드롭다운용 전체 목록 저장
-                                updateSelectedHistory(histories[0]); // 가장 최신 기록을 기본으로 선택
+                                setAvailableHistories(histories);
+                                updateSelectedHistory(histories[0]); 
                             } else {
                                 setError("조회된 가맹점이나, 진행된 방역 내역이 아직 없습니다.");
                             }
@@ -99,7 +91,6 @@
                         <p className="text-sm text-gray-500 font-medium">MSTC방역 고객사 전용 발급 포털</p>
                     </div>
 
-                    {/* 🔍 검색 폼 */}
                     {!clientData && (
                         <form onSubmit={searchCert} className="max-w-md mx-auto flex flex-col gap-4">
                             <input 
@@ -117,11 +108,8 @@
                         </form>
                     )}
 
-                    {/* 📄 증명서 결과창 */}
                     {clientData && selectedHistory && (
                         <div className="animate-fade-in mt-2">
-                            
-                            {/* 💡 [신규 기능] 월별 선택 드롭다운 및 제어 패널 */}
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 print:hidden gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-200">
                                 <div className="flex items-center gap-2 w-full sm:w-auto">
                                     <span className="text-sm font-bold text-gray-600 whitespace-nowrap">📅 발급월 선택:</span>
@@ -146,7 +134,6 @@
                                 </div>
                             </div>
 
-                            {/* 인쇄 영역 */}
                             <div id="print-area" className="border border-black p-8 md:p-12 bg-white text-black text-[13px] leading-relaxed mx-auto w-full max-w-[210mm] shadow-sm print:shadow-none print:border-0" style={{ boxSizing: "border-box" }}>
                                 
                                 <div className="flex justify-between items-start mb-2">
@@ -171,7 +158,16 @@
                                         </tr>
                                         <tr>
                                             <td className="border border-black p-4 bg-gray-50 font-bold text-center text-[13px] md:text-[14px]" colSpan="2">관리(운영)자 확인</td>
-                                            <td className="border border-black p-4 text-[13px] md:text-[14px]" colSpan="3">직위 : 대표자 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 성명 : {selectedHistory.author || "이원식"}</td>
+                                            
+                                            {/* 💡 고객 맞춤형 직위/성명 출력란 */}
+                                            <td className="border border-black p-4 text-[13px] md:text-[14px]" colSpan="3">
+                                                <div className="flex justify-between pr-4 md:pr-10">
+                                                    <span>직위 : {clientData.clientTitle || "대표"}</span>
+                                                    <span>성명 : {clientData.clientName || ""}</span>
+                                                    <span className="text-gray-400">(서명 또는 인)</span>
+                                                </div>
+                                            </td>
+
                                         </tr>
                                         <tr>
                                             <td className="border border-black p-4 bg-gray-50 font-bold text-center text-[13px] md:text-[14px]" colSpan="2">소독기간</td>
