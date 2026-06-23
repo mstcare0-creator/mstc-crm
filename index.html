@@ -53,15 +53,15 @@
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
                             setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v37", JSON.stringify(fetchedData));
+                            localStorage.setItem("mstc_crm_data_v38", JSON.stringify(fetchedData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v37");
+                            const local = localStorage.getItem("mstc_crm_data_v38");
                             if(local) setData(JSON.parse(local));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v37");
+                        const local = localStorage.getItem("mstc_crm_data_v38");
                         if(local) setData(JSON.parse(local));
                         setLoading(false);
                     });
@@ -69,7 +69,7 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v37", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v38", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
@@ -294,14 +294,11 @@
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item)); setSelectedItem(updatedItem);
             };
 
-            let totalUncollected = 0;
-            let uncollectedClientsCount = 0;
-
+            // 💡 [치명적 버그 수정] 미수금 계산 안정화
+            // 기존에는 useMemo 안에서 값을 변조시켜 컴포넌트가 다시 렌더링될 때 0원으로 튕기는 현상이 있었습니다.
+            // 이제 독립적으로 매번 새롭게 정확하게 계산하도록 수정했습니다.
             const enrichedData = useMemo(() => {
-                let debtSum = 0;
-                let debtCount = 0;
-                
-                const mapped = data.map(item => {
+                return data.map(item => {
                     let itemDebt = 0;
                     if (item.collectionStatus === "미수금") {
                         itemDebt += parseInt(String(item.uncollectedAmount || "0").replace(/,/g, ''), 10) || 0;
@@ -313,16 +310,13 @@
                             }
                         });
                     }
-                    if (itemDebt > 0) {
-                        debtSum += itemDebt;
-                        debtCount += 1;
-                    }
                     return { ...item, computedDebt: itemDebt };
                 });
-                totalUncollected = debtSum;
-                uncollectedClientsCount = debtCount;
-                return mapped;
             }, [data]);
+
+            // 미수금 총액과 개수는 enrichedData를 기반으로 매번 안전하게 렌더링됩니다.
+            const totalUncollected = enrichedData.reduce((sum, item) => sum + (item.computedDebt || 0), 0);
+            const uncollectedClientsCount = enrichedData.filter(item => (item.computedDebt || 0) > 0).length;
 
             const selectedItemDebt = selectedItem ? enrichedData.find(d => d.id === selectedItem.id)?.computedDebt || 0 : 0;
             const selectedItemTotalPaid = useMemo(() => {
@@ -333,8 +327,6 @@
             }, [selectedItem]);
 
             const selectedItemPestCount = selectedItem ? (selectedItem.history || []).filter(h => h.type === '방역').length : 0;
-            
-            // 💡 [핵심 수정] 수금완료 이거나 무료인 기록만 '수금 개월 치'에 포함되도록 필터링! (미수금 기록은 제외됨)
             const selectedItemPayCount = selectedItem ? (selectedItem.paymentHistory || []).filter(p => p.status === "수금완료" || p.status === "무료").length : 0;
 
             const currentList = useMemo(() => {
@@ -945,7 +937,7 @@
                         </div>
                     </div>
 
-                    {/* 소독증명서 출력 (관리자 화면용) */}
+                    {/* 소독증명서 출력 모달 */}
                     {isCertOpen && selectedItem && certEntry && (
                         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:bg-white print:p-0">
                             <div className="bg-white rounded-3xl p-8 max-w-3xl w-full max-h-[96vh] overflow-y-auto my-auto shadow-2xl print:shadow-none print:w-full print:h-auto print:max-h-none print:overflow-visible">
