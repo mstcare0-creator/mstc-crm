@@ -53,15 +53,15 @@
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
                             setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v33", JSON.stringify(fetchedData));
+                            localStorage.setItem("mstc_crm_data_v35", JSON.stringify(fetchedData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v33");
+                            const local = localStorage.getItem("mstc_crm_data_v35");
                             if(local) setData(JSON.parse(local));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v33");
+                        const local = localStorage.getItem("mstc_crm_data_v35");
                         if(local) setData(JSON.parse(local));
                         setLoading(false);
                     });
@@ -69,7 +69,7 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v33", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v35", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
@@ -198,6 +198,13 @@
                     cycle: fd.get("cycle"), fee: fd.get("fee") || "30000", 
                     payMethod: fd.get("payMethod") || "계좌이체",
                     providedService: fd.get("providedService") || "",
+                    
+                    parking: fd.get("parking") || "O",
+                    photoReq: fd.get("photoReq") || "X",
+                    bugZapper: fd.get("bugZapper") || "없음",
+                    trapReq: fd.get("trapReq") || "X",
+                    keyInfo: fd.get("keyInfo") || "",
+
                     etcInfo: fd.get("etcInfo") || "",
                     collectionStatus: fd.get("collectionStatus") || "수금완료", uncollectedAmount: fd.get("uncollectedAmount") || "0",
                     history: [{id: Date.now(), date: TODAY, time: "", type: "상담", content: "신규 등록 완료", author: fd.get("manager")}], paymentHistory: []
@@ -321,7 +328,7 @@
             const selectedItemTotalPaid = useMemo(() => {
                 if (!selectedItem || !selectedItem.paymentHistory) return 0;
                 return selectedItem.paymentHistory
-                    .filter(p => p.status === "수금완료")
+                    .filter(p => p.status === "수금완료" || p.status === "무료") 
                     .reduce((sum, p) => sum + (parseInt(String(p.amount || "0").replace(/,/g, ''), 10) || 0), 0);
             }, [selectedItem]);
 
@@ -485,11 +492,11 @@
                                                         </div>
                                                         <p className="text-xs text-gray-500 mt-1">📍 {item.gu} {item.dong} · 담당: <b>{item.manager}</b></p>
                                                         
-                                                        {/* 💡 [기능 추가] 리스트에서 기타(추가 정보) 메모 바로 노출 */}
-                                                        {item.etcInfo && (
-                                                            <p className="text-[11px] text-gray-600 mt-1.5 bg-gray-50 px-2 py-1.5 rounded-lg border border-gray-200 truncate w-full shadow-sm">
-                                                                💡 {item.etcInfo}
-                                                            </p>
+                                                        {(item.etcInfo || item.keyInfo) && (
+                                                            <div className="mt-2 space-y-1 w-full max-w-[250px]">
+                                                                {item.keyInfo && <p className="text-[11px] text-blue-700 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 truncate shadow-sm">🔑 {item.keyInfo}</p>}
+                                                                {item.etcInfo && <p className="text-[11px] text-gray-600 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200 truncate shadow-sm">💡 {item.etcInfo}</p>}
+                                                            </div>
                                                         )}
                                                     </div>
                                                     <div className="flex flex-col items-end gap-1 text-[10px] font-bold shrink-0">
@@ -526,10 +533,10 @@
                                             </div>
                                         </div>
                                         
-                                        {/* 💡 [기능 추가] 기타(추가 정보)를 상세 창 상단에 고정 노출 */}
-                                        {selectedItem.etcInfo && (
-                                            <div className="mt-3 text-[11px] bg-white text-gray-700 p-2.5 rounded-xl border border-gray-200 break-words whitespace-pre-wrap shadow-sm">
-                                                <span className="font-bold text-amber-600">💡 메모 및 특이사항:</span><br/>{selectedItem.etcInfo}
+                                        {(selectedItem.etcInfo || selectedItem.keyInfo) && (
+                                            <div className="mt-3 text-[11px] bg-white text-gray-700 p-2.5 rounded-xl border border-gray-200 break-words whitespace-pre-wrap shadow-sm space-y-1">
+                                                {selectedItem.keyInfo && <p><span className="font-bold text-blue-600">🔑 출입/열쇠:</span> {selectedItem.keyInfo}</p>}
+                                                {selectedItem.etcInfo && <p><span className="font-bold text-amber-600">💡 메모/특이사항:</span> {selectedItem.etcInfo}</p>}
                                             </div>
                                         )}
                                     </div>
@@ -567,14 +574,22 @@
                                                             </label>
                                                             <label className="col-span-2"><b>상세 주소 *</b><input value={editForm.address || ""} onChange={e=>setEditForm({...editForm, address: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="필수 입력" /></label>
                                                             
+                                                            {/* 💡 [명칭 수정 반영] 헷갈리는 서명란 설정 문구 개선 */}
                                                             <div className="col-span-2 bg-blue-50 border border-blue-200 p-3 rounded-xl mt-2">
-                                                                <p className="text-blue-800 font-bold mb-2">📄 소독증명서 고객 서명란 설정</p>
+                                                                <p className="text-blue-800 font-bold mb-2">📄 증명서 발급 시 표기될 고객(관리자) 정보</p>
                                                                 <div className="flex gap-2">
                                                                     <label className="flex-1"><b>증명서 표기 직위</b><select value={editForm.clientTitle || "대표"} onChange={e=>setEditForm({...editForm, clientTitle: e.target.value})} className="border p-2 w-full rounded outline-none mt-1"><option>대표</option><option>점장</option><option>원장</option><option>소장</option><option>매니저</option></select></label>
                                                                     <label className="flex-1"><b>증명서 표기 성명</b><input value={editForm.clientName || ""} onChange={e=>setEditForm({...editForm, clientName: e.target.value})} className="border p-2 w-full rounded outline-none mt-1" placeholder="미입력시 대원명" /></label>
                                                                 </div>
                                                             </div>
                                                             
+                                                            <label className="col-span-2 text-blue-800 font-bold border-t pt-2 mt-2">🏃‍♂️ 현장 출동 체크리스트</label>
+                                                            <label className="col-span-1"><b>주차 공간</b><select value={editForm.parking || "O"} onChange={e=>setEditForm({...editForm, parking: e.target.value})} className="w-full p-2 border rounded-lg mt-1"><option value="O">O (가능)</option><option value="X">X (불가/어려움)</option><option value="△">△ (협소/확인필요)</option></select></label>
+                                                            <label className="col-span-1"><b>작업 사진</b><select value={editForm.photoReq || "X"} onChange={e=>setEditForm({...editForm, photoReq: e.target.value})} className="w-full p-2 border rounded-lg mt-1"><option value="O">O (필요함)</option><option value="X">X (불필요)</option></select></label>
+                                                            <label className="col-span-1"><b>포충기 관리</b><select value={editForm.bugZapper || "없음"} onChange={e=>setEditForm({...editForm, bugZapper: e.target.value})} className="w-full p-2 border rounded-lg mt-1"><option value="없음">없음</option><option value="소">소</option><option value="중">중</option><option value="대">대</option></select></label>
+                                                            <label className="col-span-1"><b>트랩 관리</b><select value={editForm.trapReq || "X"} onChange={e=>setEditForm({...editForm, trapReq: e.target.value})} className="w-full p-2 border rounded-lg mt-1"><option value="O">O (설치함)</option><option value="X">X (없음)</option></select></label>
+                                                            <label className="col-span-2"><b>출입 방법 (열쇠/비밀번호)</b><input value={editForm.keyInfo || ""} onChange={e=>setEditForm({...editForm, keyInfo: e.target.value})} className="border p-2 w-full rounded outline-none mt-1" placeholder="예: 비번 2580*, 경비실 호출 등" /></label>
+
                                                             <label className="col-span-2 text-emerald-800 font-bold border-t pt-2 mt-2">🛠️ 필수 관리 항목</label>
                                                             <label>방역시작일 <input type="date" value={editForm.contractStart || ""} onChange={e=>setEditForm({...editForm, contractStart: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
                                                             <label>평수(면적) <input value={editForm.area || ""} onChange={e=>setEditForm({...editForm, area: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
@@ -610,9 +625,20 @@
                                                             </p>
                                                         </div>
                                                         
-                                                        <div className="col-span-2 p-3 bg-blue-50/50 rounded-xl border border-blue-100 mb-1">
-                                                            <p className="text-blue-800 font-bold mb-1">📄 증명서 출력 설정</p>
-                                                            <p className="text-gray-600">직위: <span className="font-bold">{selectedItem.clientTitle || "대표"}</span> / 서명: <span className="font-bold">{selectedItem.clientName || "(출동대원 이름 자동출력)"}</span></p>
+                                                        {/* 💡 [명칭 수정 반영] 상세 확인 탭 */}
+                                                        <div className="col-span-2 p-3 bg-blue-50/50 rounded-xl border border-blue-100 mb-1 mt-1">
+                                                            <p className="text-blue-800 font-bold mb-1">📄 증명서 표기 고객(관리자) 정보</p>
+                                                            <p className="text-gray-600">직위: <span className="font-bold">{selectedItem.clientTitle || "대표"}</span> / 성명: <span className="font-bold">{selectedItem.clientName || "(미입력 시 대원 이름 출력)"}</span></p>
+                                                        </div>
+
+                                                        <div className="col-span-2 p-3 bg-white rounded-xl border border-gray-200 mb-1 mt-1 shadow-sm">
+                                                            <p className="text-gray-700 font-bold mb-2">🏃‍♂️ 현장 출동 정보 요약</p>
+                                                            <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
+                                                                <div className="bg-gray-50 p-2 rounded-lg"><p className="text-gray-400 mb-1">🚗 주차</p><p className={`font-bold ${selectedItem.parking === 'X' ? 'text-red-600' : 'text-gray-800'}`}>{selectedItem.parking || "O"}</p></div>
+                                                                <div className="bg-gray-50 p-2 rounded-lg"><p className="text-gray-400 mb-1">📸 사진</p><p className={`font-bold ${selectedItem.photoReq === 'O' ? 'text-blue-600' : 'text-gray-800'}`}>{selectedItem.photoReq || "X"}</p></div>
+                                                                <div className="bg-gray-50 p-2 rounded-lg"><p className="text-gray-400 mb-1">💡 포충기</p><p className="font-bold text-gray-800">{selectedItem.bugZapper || "없음"}</p></div>
+                                                                <div className="bg-gray-50 p-2 rounded-lg"><p className="text-gray-400 mb-1">🪤 트랩</p><p className="font-bold text-gray-800">{selectedItem.trapReq || "X"}</p></div>
+                                                            </div>
                                                         </div>
 
                                                         <div><p className="text-gray-400">담당 대원</p><p className="font-bold mt-1">{selectedItem.manager}</p></div>
@@ -634,10 +660,6 @@
                                                                 <p className="font-bold text-rose-700 text-sm">🚨 총 미납 잔액: ₩{selectedItemDebt.toLocaleString()}</p> : 
                                                                 <p className="font-bold text-[#0B5E4D] text-sm">✅ 수금 문제 없음</p>
                                                             }
-                                                        </div>
-                                                        <div className="col-span-2 border-t pt-3 mt-1">
-                                                            <p className="text-gray-400">기타 (추가 정보)</p>
-                                                            <p className="font-medium text-gray-800 mt-1 whitespace-pre-wrap">{selectedItem.etcInfo || "등록된 추가 정보가 없습니다."}</p>
                                                         </div>
                                                     </div>
                                                 )}
@@ -678,7 +700,6 @@
                                                         <div className="grid grid-cols-2 gap-3">
                                                             <label className="block"><b>수금 월</b><input type="month" value={payForm.month} onChange={e => setPayForm({...payForm, month: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" required /></label>
                                                             
-                                                            {/* 💡 [기능 추가] 수금 상태에 '무료' 옵션 추가 */}
                                                             <label className="block"><b>수금 상태</b>
                                                                 <select 
                                                                     value={payForm.status} 
@@ -694,7 +715,7 @@
                                                             </label>
 
                                                             <label className="block"><b>결제/미수 금액 (원)</b><input type="number" step="5000" value={payForm.amount} onChange={e => setPayForm({...payForm, amount: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" required /></label>
-                                                            <label className="block"><b>결제 방식</b><select value={payForm.method} onChange={e => setPayForm({...payForm, method: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none font-bold bg-white"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option></select></label>
+                                                            <label className="block"><b>결제 방식</b><select value={payForm.method} onChange={e => setPayForm({...payForm, method: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none font-bold bg-white"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>기타</option></select></label>
                                                             <label className="block col-span-2"><b>메모 (페이소프트, 입금자명 등)</b><input type="text" value={payForm.note} onChange={e => setPayForm({...payForm, note: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" placeholder="비고란" /></label>
                                                         </div>
                                                         <div className="flex gap-2 justify-end pt-2">
@@ -722,7 +743,6 @@
                                                                 <button onClick={() => handleDeletePayment(p.id)} className="text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
                                                             </div>
                                                             <div className="flex justify-between items-center mb-1 pr-24">
-                                                                {/* 💡 [기능 추가] 상태에 따른 UI 컬러 분기 */}
                                                                 <span className={`font-bold text-sm ${p.status === '미수금' ? 'text-red-600' : p.status === '무료' ? 'text-emerald-600' : 'text-blue-600'}`}>
                                                                     {p.status === '무료' ? '🎁' : '💰'} {p.status}
                                                                 </span>
@@ -943,13 +963,21 @@
                                     
                                     <label className="col-span-2"><b>상세주소 *</b><input name="address" className="w-full p-2 border rounded-lg mt-1" placeholder="필수 입력" /></label>
                                     
+                                    {/* 💡 [명칭 수정 반영] 헷갈리는 서명란 설정 문구 개선 */}
                                     <div className="col-span-2 bg-blue-50 border border-blue-200 p-3 rounded-xl mt-2">
-                                        <p className="text-blue-800 font-bold mb-2">📄 소독증명서 출력용 설정</p>
+                                        <p className="text-blue-800 font-bold mb-2">📄 증명서 발급 시 표기될 고객(관리자) 정보</p>
                                         <div className="flex gap-2">
                                             <label className="flex-1"><b>증명서 표기 직위</b><select name="clientTitle" className="w-full p-2 border rounded-lg mt-1"><option>대표</option><option>점장</option><option>원장</option><option>소장</option><option>매니저</option></select></label>
                                             <label className="flex-1"><b>증명서 표기 성명</b><input name="clientName" className="w-full p-2 border rounded-lg mt-1" placeholder="미입력시 대원명" /></label>
                                         </div>
                                     </div>
+
+                                    <label className="col-span-2 text-blue-800 font-bold border-t pt-2 mt-2">🏃‍♂️ 현장 출동 체크리스트</label>
+                                    <label className="col-span-1"><b>주차 가능 여부</b><select name="parking" defaultValue="O" className="w-full p-2 border rounded-lg mt-1"><option value="O">O (가능)</option><option value="X">X (불가/어려움)</option><option value="△">△ (협소/확인필요)</option></select></label>
+                                    <label className="col-span-1"><b>작업 사진 필수</b><select name="photoReq" defaultValue="X" className="w-full p-2 border rounded-lg mt-1"><option value="O">O (필요함)</option><option value="X">X (불필요)</option></select></label>
+                                    <label className="col-span-1"><b>포충기 관리</b><select name="bugZapper" defaultValue="없음" className="w-full p-2 border rounded-lg mt-1"><option value="없음">없음</option><option value="소">소</option><option value="중">중</option><option value="대">대</option></select></label>
+                                    <label className="col-span-1"><b>트랩 설치/관리</b><select name="trapReq" defaultValue="X" className="w-full p-2 border rounded-lg mt-1"><option value="O">O (설치함)</option><option value="X">X (없음)</option></select></label>
+                                    <label className="col-span-2"><b>출입 방법 (열쇠/비번)</b><input name="keyInfo" className="w-full p-2 border rounded-lg mt-1" placeholder="예: 비번 2580*, 경비실 호출 등" /></label>
 
                                     <label className="col-span-2 text-emerald-800 font-bold border-t pt-2 mt-2">🛠️ 필수 관리 항목</label>
                                     <label><b>방역시작일 *</b><input type="date" name="contractStart" defaultValue={TODAY} className="w-full p-2 border rounded-lg mt-1" /></label>
@@ -962,7 +990,7 @@
                                     <label><b>결제 방식 *</b><select name="payMethod" className="w-full p-2 border rounded-lg mt-1"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>기타</option></select></label>
                                     <label><b>결제 상태 *</b><select name="payStatus" className="w-full p-2 border rounded-lg mt-1"><option>유료</option><option>무료</option><option>일시중지</option><option>해지</option></select></label>
                                     
-                                    <label className="col-span-2"><b>제공 서비스</b><input name="providedService" className="w-full p-2 border rounded-lg mt-1" placeholder="예: 포충기 대여, 쥐 트랩 등" /></label>
+                                    <label className="col-span-2"><b>제공 서비스</b><input name="providedService" className="w-full p-2 border rounded-lg mt-1" placeholder="예: 포충기 대여, 방향제 등" /></label>
 
                                     <label className="col-span-2 mt-2"><b>기타 (추가 정보)</b><textarea name="etcInfo" className="w-full p-2 border rounded-lg mt-1 h-16" placeholder="특이사항 등 자유롭게 입력"></textarea></label>
                                 </div>
