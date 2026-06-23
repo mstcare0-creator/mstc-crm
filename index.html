@@ -53,15 +53,15 @@
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
                             setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v35", JSON.stringify(fetchedData));
+                            localStorage.setItem("mstc_crm_data_v36", JSON.stringify(fetchedData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v35");
+                            const local = localStorage.getItem("mstc_crm_data_v36");
                             if(local) setData(JSON.parse(local));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v35");
+                        const local = localStorage.getItem("mstc_crm_data_v36");
                         if(local) setData(JSON.parse(local));
                         setLoading(false);
                     });
@@ -69,7 +69,7 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v35", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v36", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
@@ -492,6 +492,14 @@
                                                         </div>
                                                         <p className="text-xs text-gray-500 mt-1">📍 {item.gu} {item.dong} · 담당: <b>{item.manager}</b></p>
                                                         
+                                                        {/* 💡 [기능 추가] 현장 출동 요약 뱃지 (왼쪽 리스트 노출) */}
+                                                        <div className="mt-2 flex flex-wrap gap-1.5">
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded border shadow-sm ${item.parking === 'X' ? 'bg-red-50 text-red-700 border-red-200 font-bold' : item.parking === '△' ? 'bg-amber-50 text-amber-700 border-amber-200 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>🚗 주차 {item.parking || 'O'}</span>
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded border shadow-sm ${item.photoReq === 'O' ? 'bg-blue-50 text-blue-700 border-blue-200 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>📸 사진 {item.photoReq || 'X'}</span>
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded border shadow-sm ${item.bugZapper && item.bugZapper !== '없음' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>💡 포충기 {item.bugZapper || '없음'}</span>
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded border shadow-sm ${item.trapReq === 'O' ? 'bg-purple-50 text-purple-700 border-purple-200 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>🪤 트랩 {item.trapReq || 'X'}</span>
+                                                        </div>
+
                                                         {(item.etcInfo || item.keyInfo) && (
                                                             <div className="mt-2 space-y-1 w-full max-w-[250px]">
                                                                 {item.keyInfo && <p className="text-[11px] text-blue-700 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 truncate shadow-sm">🔑 {item.keyInfo}</p>}
@@ -574,7 +582,6 @@
                                                             </label>
                                                             <label className="col-span-2"><b>상세 주소 *</b><input value={editForm.address || ""} onChange={e=>setEditForm({...editForm, address: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="필수 입력" /></label>
                                                             
-                                                            {/* 💡 [명칭 수정 반영] 헷갈리는 서명란 설정 문구 개선 */}
                                                             <div className="col-span-2 bg-blue-50 border border-blue-200 p-3 rounded-xl mt-2">
                                                                 <p className="text-blue-800 font-bold mb-2">📄 증명서 발급 시 표기될 고객(관리자) 정보</p>
                                                                 <div className="flex gap-2">
@@ -625,7 +632,6 @@
                                                             </p>
                                                         </div>
                                                         
-                                                        {/* 💡 [명칭 수정 반영] 상세 확인 탭 */}
                                                         <div className="col-span-2 p-3 bg-blue-50/50 rounded-xl border border-blue-100 mb-1 mt-1">
                                                             <p className="text-blue-800 font-bold mb-1">📄 증명서 표기 고객(관리자) 정보</p>
                                                             <p className="text-gray-600">직위: <span className="font-bold">{selectedItem.clientTitle || "대표"}</span> / 성명: <span className="font-bold">{selectedItem.clientName || "(미입력 시 대원 이름 출력)"}</span></p>
@@ -963,7 +969,6 @@
                                     
                                     <label className="col-span-2"><b>상세주소 *</b><input name="address" className="w-full p-2 border rounded-lg mt-1" placeholder="필수 입력" /></label>
                                     
-                                    {/* 💡 [명칭 수정 반영] 헷갈리는 서명란 설정 문구 개선 */}
                                     <div className="col-span-2 bg-blue-50 border border-blue-200 p-3 rounded-xl mt-2">
                                         <p className="text-blue-800 font-bold mb-2">📄 증명서 발급 시 표기될 고객(관리자) 정보</p>
                                         <div className="flex gap-2">
