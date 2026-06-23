@@ -53,15 +53,15 @@
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
                             setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v36", JSON.stringify(fetchedData));
+                            localStorage.setItem("mstc_crm_data_v37", JSON.stringify(fetchedData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v36");
+                            const local = localStorage.getItem("mstc_crm_data_v37");
                             if(local) setData(JSON.parse(local));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v36");
+                        const local = localStorage.getItem("mstc_crm_data_v37");
                         if(local) setData(JSON.parse(local));
                         setLoading(false);
                     });
@@ -69,7 +69,7 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v36", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v37", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
@@ -333,7 +333,9 @@
             }, [selectedItem]);
 
             const selectedItemPestCount = selectedItem ? (selectedItem.history || []).filter(h => h.type === '방역').length : 0;
-            const selectedItemPayCount = selectedItem ? (selectedItem.paymentHistory || []).length : 0;
+            
+            // 💡 [핵심 수정] 수금완료 이거나 무료인 기록만 '수금 개월 치'에 포함되도록 필터링! (미수금 기록은 제외됨)
+            const selectedItemPayCount = selectedItem ? (selectedItem.paymentHistory || []).filter(p => p.status === "수금완료" || p.status === "무료").length : 0;
 
             const currentList = useMemo(() => {
                 return enrichedData.filter(r => {
@@ -492,7 +494,6 @@
                                                         </div>
                                                         <p className="text-xs text-gray-500 mt-1">📍 {item.gu} {item.dong} · 담당: <b>{item.manager}</b></p>
                                                         
-                                                        {/* 💡 [기능 추가] 현장 출동 요약 뱃지 (왼쪽 리스트 노출) */}
                                                         <div className="mt-2 flex flex-wrap gap-1.5">
                                                             <span className={`text-[10px] px-1.5 py-0.5 rounded border shadow-sm ${item.parking === 'X' ? 'bg-red-50 text-red-700 border-red-200 font-bold' : item.parking === '△' ? 'bg-amber-50 text-amber-700 border-amber-200 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>🚗 주차 {item.parking || 'O'}</span>
                                                             <span className={`text-[10px] px-1.5 py-0.5 rounded border shadow-sm ${item.photoReq === 'O' ? 'bg-blue-50 text-blue-700 border-blue-200 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>📸 사진 {item.photoReq || 'X'}</span>
@@ -633,7 +634,7 @@
                                                         </div>
                                                         
                                                         <div className="col-span-2 p-3 bg-blue-50/50 rounded-xl border border-blue-100 mb-1 mt-1">
-                                                            <p className="text-blue-800 font-bold mb-1">📄 증명서 표기 고객(관리자) 정보</p>
+                                                            <p className="text-blue-800 font-bold mb-1">📄 증명서 발급 시 표기될 고객(관리자) 정보</p>
                                                             <p className="text-gray-600">직위: <span className="font-bold">{selectedItem.clientTitle || "대표"}</span> / 성명: <span className="font-bold">{selectedItem.clientName || "(미입력 시 대원 이름 출력)"}</span></p>
                                                         </div>
 
@@ -943,73 +944,6 @@
                             )}
                         </div>
                     </div>
-
-                    {/* 신규 등록 모달 */}
-                    {isModalOpen && (
-                        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                            <form onSubmit={handleRegister} className="bg-white rounded-3xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
-                                <h3 className="text-lg font-bold mb-4 border-b pb-2">신규 업체 등록</h3>
-                                <div className="grid grid-cols-2 gap-3 text-xs">
-                                    <label className="col-span-2"><b>등록 탭 구분 *</b>
-                                        <select name="tab" defaultValue={currentTab === "prospect" ? "prospect" : "active"} className="w-full p-2 border rounded-lg mt-1 bg-gray-50"><option value="active">방역 거래처 (운영)</option><option value="prospect">영업처 (대기)</option></select>
-                                    </label>
-                                    
-                                    <label className="col-span-2"><b>상호명 *</b><input name="name" className="w-full p-2 border rounded-lg mt-1" placeholder="필수 입력" /></label>
-                                    
-                                    <label className="col-span-1"><b>대표자명 (선택)</b><input name="clientRepName" className="w-full p-2 border rounded-lg mt-1" placeholder="업체 대표 이름" /></label>
-                                    <label className="col-span-1"><b>사업자번호 (선택)</b><input name="bizNumber" className="w-full p-2 border rounded-lg mt-1" placeholder="숫자만 입력" /></label>
-                                    
-                                    <label className="col-span-1"><b>담당 대원 *</b><select name="manager" className="w-full p-2 border rounded-lg mt-1">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
-                                    <label className="col-span-1"><b>연락처 *</b><input name="phone" className="w-full p-2 border rounded-lg mt-1" placeholder="필수 입력" /></label>
-                                    
-                                    <label className="col-span-2 flex gap-2">
-                                        <div className="flex-1"><b>시/도 *</b><select name="gu" value={regCity} onChange={e=>setRegCity(e.target.value)} className="border p-2 w-full rounded-lg mt-1 bg-white">{Object.keys(REGIONS).map(r=><option key={r}>{r}</option>)}</select></div>
-                                        <div className="flex-1"><b>구/군 *</b><select name="dong" className="border p-2 w-full rounded-lg mt-1 bg-white">{REGIONS[regCity].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
-                                    </label>
-                                    
-                                    <label className="col-span-2"><b>상세주소 *</b><input name="address" className="w-full p-2 border rounded-lg mt-1" placeholder="필수 입력" /></label>
-                                    
-                                    <div className="col-span-2 bg-blue-50 border border-blue-200 p-3 rounded-xl mt-2">
-                                        <p className="text-blue-800 font-bold mb-2">📄 증명서 발급 시 표기될 고객(관리자) 정보</p>
-                                        <div className="flex gap-2">
-                                            <label className="flex-1"><b>증명서 표기 직위</b><select name="clientTitle" className="w-full p-2 border rounded-lg mt-1"><option>대표</option><option>점장</option><option>원장</option><option>소장</option><option>매니저</option></select></label>
-                                            <label className="flex-1"><b>증명서 표기 성명</b><input name="clientName" className="w-full p-2 border rounded-lg mt-1" placeholder="미입력시 대원명" /></label>
-                                        </div>
-                                    </div>
-
-                                    <label className="col-span-2 text-blue-800 font-bold border-t pt-2 mt-2">🏃‍♂️ 현장 출동 체크리스트</label>
-                                    <label className="col-span-1"><b>주차 가능 여부</b><select name="parking" defaultValue="O" className="w-full p-2 border rounded-lg mt-1"><option value="O">O (가능)</option><option value="X">X (불가/어려움)</option><option value="△">△ (협소/확인필요)</option></select></label>
-                                    <label className="col-span-1"><b>작업 사진 필수</b><select name="photoReq" defaultValue="X" className="w-full p-2 border rounded-lg mt-1"><option value="O">O (필요함)</option><option value="X">X (불필요)</option></select></label>
-                                    <label className="col-span-1"><b>포충기 관리</b><select name="bugZapper" defaultValue="없음" className="w-full p-2 border rounded-lg mt-1"><option value="없음">없음</option><option value="소">소</option><option value="중">중</option><option value="대">대</option></select></label>
-                                    <label className="col-span-1"><b>트랩 설치/관리</b><select name="trapReq" defaultValue="X" className="w-full p-2 border rounded-lg mt-1"><option value="O">O (설치함)</option><option value="X">X (없음)</option></select></label>
-                                    <label className="col-span-2"><b>출입 방법 (열쇠/비번)</b><input name="keyInfo" className="w-full p-2 border rounded-lg mt-1" placeholder="예: 비번 2580*, 경비실 호출 등" /></label>
-
-                                    <label className="col-span-2 text-emerald-800 font-bold border-t pt-2 mt-2">🛠️ 필수 관리 항목</label>
-                                    <label><b>방역시작일 *</b><input type="date" name="contractStart" defaultValue={TODAY} className="w-full p-2 border rounded-lg mt-1" /></label>
-                                    <label><b>평수 (면적) *</b><input name="area" defaultValue="30" className="w-full p-2 border rounded-lg mt-1" /></label>
-                                    
-                                    <label><b>계약 금액 *</b><input type="number" step="5000" name="fee" defaultValue="30000" className="w-full p-2 border rounded-lg mt-1" /></label>
-                                    
-                                    <label><b>방역 주기 *</b><select name="cycle" className="w-full p-2 border rounded-lg mt-1">{CYCLES.map(c=><option key={c}>{c}</option>)}</select></label>
-                                    <label><b>방역 구분 *</b><select name="serviceType" className="w-full p-2 border rounded-lg mt-1"><option>정기</option><option>분기</option><option>무료</option></select></label>
-                                    <label><b>결제 방식 *</b><select name="payMethod" className="w-full p-2 border rounded-lg mt-1"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>기타</option></select></label>
-                                    <label><b>결제 상태 *</b><select name="payStatus" className="w-full p-2 border rounded-lg mt-1"><option>유료</option><option>무료</option><option>일시중지</option><option>해지</option></select></label>
-                                    
-                                    <label className="col-span-2"><b>제공 서비스</b><input name="providedService" className="w-full p-2 border rounded-lg mt-1" placeholder="예: 포충기 대여, 방향제 등" /></label>
-
-                                    <label className="col-span-2 mt-2"><b>기타 (추가 정보)</b><textarea name="etcInfo" className="w-full p-2 border rounded-lg mt-1 h-16" placeholder="특이사항 등 자유롭게 입력"></textarea></label>
-                                </div>
-                                
-                                <div className="flex justify-between items-center mt-6 border-t pt-4">
-                                    <span className="text-red-500 font-bold text-xs">{regError}</span>
-                                    <div className="flex gap-2">
-                                        <button type="button" onClick={() => { setIsModalOpen(false); setRegError(""); }} className="px-5 py-2 border rounded-xl bg-gray-100 font-bold text-xs">취소</button>
-                                        <button type="submit" className="px-6 py-2 bg-[#0B5E4D] text-white rounded-xl font-bold text-xs">등록 완료</button>
-                                    </div>
-                                </div>
-                            </form>
-                        </div>
-                    )}
 
                     {/* 소독증명서 출력 (관리자 화면용) */}
                     {isCertOpen && selectedItem && certEntry && (
