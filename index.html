@@ -35,7 +35,6 @@
         const CYCLES = ["월1회", "3개월1회", "단기"];
         const CHEMICALS_BY_TYPE = { "살균": ["마이크로켐 골드", "키니아 비실드"], "살충": ["롱다운플러스", "맥스포스 셀렉트 이지갤", "다발이끔 살서제"] };
         
-        // 💡 부산에 '해운대구' 추가 완료!
         const REGIONS = { 
             "부산": ["강서구", "금정구", "기장군", "남구", "동구", "동래구", "부산진구", "북구", "사상구", "사하구", "서구", "수영구", "연제구", "영도구", "중구", "해운대구"],
             "창원": ["의창구", "성산구", "마산합포구", "마산회원구", "진해구"],
@@ -44,7 +43,7 @@
 
         const COMPANY_SEAL_URL = "https://mstcare0-creator.github.io/mstc-crm/seal.png"; 
 
-        // 💡 엑셀 복붙 시 빈칸/에러 방지를 위한 강력한 데이터 보정 함수
+        // 💡 데이터 보정 함수: tab이 없거나 빈칸이면 무조건 'active(운영중)'로 띄워주도록 수정
         const normalizeData = (rawData) => {
             if (!Array.isArray(rawData)) return [];
             return rawData.map(item => {
@@ -64,8 +63,13 @@
                     }
                 }
 
+                // tab이 없거나, status 열만 있는 경우를 위한 보정 로직
+                let validTab = item.tab || item.status || "active";
+                if (validTab.trim() === "") validTab = "active"; // 빈칸이면 강제로 active
+
                 return {
                     ...item,
+                    tab: validTab, // 여기서 tab을 강제 생성 및 주입!
                     history: parsedHistory,
                     paymentHistory: parsedPayment,
                     fee: String(item.fee || "0").replace(/,/g, ''),
@@ -90,7 +94,6 @@
                 fetch(GOOGLE_SCRIPT_URL)
                     .then(res => res.json())
                     .then(fetchedData => {
-                        // 💡 가져온 데이터를 완벽하게 보정(Normalize)하여 에러 원천 차단
                         const normData = normalizeData(fetchedData);
                         if (normData.length > 0) {
                             setData(normData);
@@ -1030,7 +1033,7 @@
                         </div>
                     )}
 
-                    {/* 신규 등록 팝업 (핵심 계약 정보 추가) */}
+                    {/* 신규 등록 팝업 */}
                     {isModalOpen && (
                         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
                             <div className="bg-white rounded-3xl p-6 w-full max-w-2xl shadow-2xl overflow-y-auto max-h-[90vh] animate-fade-in">
