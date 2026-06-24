@@ -32,7 +32,6 @@
         const TODAY = new Date().toISOString().split('T')[0];
         const CURRENT_MONTH = TODAY.slice(0, 7);
         const CURRENT_MONTH_NUM = parseInt(CURRENT_MONTH.split('-')[1], 10);
-        const STAFF = ["이원식", "강현준"];
         const CYCLES = ["월1회", "3개월1회", "단기"];
         const CHEMICALS_BY_TYPE = { "살균": ["마이크로켐 골드", "키니아 비실드"], "살충": ["롱다운플러스", "맥스포스 셀렉트 이지갤", "다발이끔 살서제"] };
         const REGIONS = { 
@@ -46,6 +45,15 @@
         function App() {
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
+
+            // 💡 출동대원 동적 관리 State
+            const [staffList, setStaffList] = useState(() => {
+                const saved = localStorage.getItem("mstc_staff_list_v1");
+                return saved ? JSON.parse(saved) : ["이원식", "강현준"];
+            });
+            useEffect(() => { localStorage.setItem("mstc_staff_list_v1", JSON.stringify(staffList)); }, [staffList]);
+            const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+            const [newStaffInput, setNewStaffInput] = useState("");
 
             useEffect(() => {
                 fetch(GOOGLE_SCRIPT_URL)
@@ -100,11 +108,11 @@
             const [editError, setEditError] = useState("");
 
             const [showHistoryForm, setShowHistoryForm] = useState(false);
-            const [historyForm, setHistoryForm] = useState({ date: TODAY, time: "", type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: "이원식" });
+            const [historyForm, setHistoryForm] = useState({ date: TODAY, time: "", type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: staffList[0] || "" });
             const [editingHistoryId, setEditingHistoryId] = useState(null);
 
             const [showPayForm, setShowPayForm] = useState(false);
-            const [payForm, setPayForm] = useState({ month: CURRENT_MONTH, amount: "30000", status: "수금완료", method: "계좌이체", note: "" });
+            const [payForm, setPayForm] = useState({ month: TODAY, amount: "30000", status: "수금완료", method: "계좌이체", note: "" });
             const [editingPayId, setEditingPayId] = useState(null);
 
             const [customMethodInput, setCustomMethodInput] = useState("");
@@ -130,6 +138,19 @@
             const [certEntry, setCertEntry] = useState(null);
             const [certNumber, setCertNumber] = useState("");
             const [sealImgFailed, setSealImgFailed] = useState(false); 
+
+            // 💡 대원 추가/삭제 핸들러
+            const handleAddStaff = () => {
+                const val = newStaffInput.trim();
+                if (val && !staffList.includes(val)) {
+                    setStaffList([...staffList, val]);
+                }
+                setNewStaffInput("");
+            };
+            const handleDeleteStaff = (staffToRemove) => {
+                if(!confirm(`'${staffToRemove}' 대원을 목록에서 삭제하시겠습니까?\n(💡 기존 방역 기록 및 업체 담당자로 지정된 정보는 안전하게 유지됩니다.)`)) return;
+                setStaffList(staffList.filter(s => s !== staffToRemove));
+            };
 
             const handleSelectItem = (item) => {
                 setSelectedItem(item);
@@ -191,9 +212,6 @@
                     name: name, manager: fd.get("manager"), phone: phone,
                     bizNumber: fd.get("bizNumber") || "", 
                     clientRepName: fd.get("clientRepName") || "", 
-                    
-                    // 💡 증명서 관련 입력 항목은 삭제되었으므로 기본값 무시
-                    
                     gu: fd.get("gu"), dong: fd.get("dong"), address: address, area: fd.get("area"),
                     contractStart: fd.get("contractStart") || TODAY, serviceType: fd.get("serviceType"), payStatus: payStat,
                     cycle: fd.get("cycle"), fee: fd.get("fee") || "30000", 
@@ -281,7 +299,7 @@
                 const updatedItem = { ...selectedItem, paymentHistory: updatedPayList };
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item));
                 setSelectedItem(updatedItem); setShowPayForm(false); setEditingPayId(null);
-                setPayForm({ month: CURRENT_MONTH, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "" });
+                setPayForm({ month: TODAY, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "" });
             };
 
             const handleEditPayInit = (p) => {
@@ -341,8 +359,10 @@
             }, [enrichedData, currentTab, search, filterCity, filterDistrict, filterServiceType, filterCollection, filterCompletion]);
 
             const activeData = enrichedData.filter(d => d.tab === 'active');
-            const leeCount = activeData.filter(d => d.manager === '이원식').length;
-            const kangCount = activeData.filter(d => d.manager === '강현준').length;
+            
+            // 💡 담당자별 동적 카운트 계산
+            const staffCountsText = staffList.map(staff => `${staff} ${activeData.filter(d => d.manager === staff).length}`).join(" · ");
+            
             const completedThisMonth = activeData.filter(c => c.history && c.history.some(h => h.type === '방역' && h.date && h.date.startsWith(CURRENT_MONTH))).length;
             const delayedThisMonth = activeData.length - completedThisMonth;
             const activeLikeCount = enrichedData.filter(d => d.tab === 'active' || d.tab === 'paused').length;
@@ -382,7 +402,11 @@
             const availablePaymentYears = selectedItem && selectedItem.paymentHistory ? [...new Set(selectedItem.paymentHistory.map(p => p.month ? p.month.split('-')[0] : ''))].filter(Boolean).sort().reverse() : [];
             const filteredPayment = selectedItem && selectedItem.paymentHistory ? [...selectedItem.paymentHistory]
                 .filter(p => paymentYearFilter === 'all' || (p.month && p.month.startsWith(paymentYearFilter)))
-                .sort((a, b) => new Date((b.month || '') + '-01') - new Date((a.month || '') + '-01')) : [];
+                .sort((a, b) => {
+                    const dateA = a.month?.length === 7 ? `${a.month}-01` : a.month;
+                    const dateB = b.month?.length === 7 ? `${b.month}-01` : b.month;
+                    return new Date(dateB || 0) - new Date(dateA || 0);
+                }) : [];
 
             return (
                 <div>
@@ -400,7 +424,7 @@
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
                                 <div className="p-4 bg-[#E3F2EC] rounded-xl text-[#0B5E4D] text-2xl">👤</div>
-                                <div><p className="text-xs text-gray-400 font-bold mb-0.5">운영중 거래처</p><p className="text-2xl font-black text-gray-800 leading-none">{activeData.length}</p><p className="text-[11px] text-gray-500 mt-1.5">이원식 {leeCount} · 강현준 {kangCount}</p></div>
+                                <div><p className="text-xs text-gray-400 font-bold mb-0.5">운영중 거래처</p><p className="text-2xl font-black text-gray-800 leading-none">{activeData.length}</p><p className="text-[11px] text-gray-500 mt-1.5 truncate max-w-[130px] sm:max-w-[150px]" title={staffCountsText}>{staffCountsText || "담당자 없음"}</p></div>
                             </div>
                             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
                                 <div className="p-4 bg-rose-50 rounded-xl text-rose-700 text-2xl">📅</div>
@@ -420,7 +444,10 @@
                             <div className="flex justify-between items-center mb-6">
                                 <div className="flex items-center gap-3">
                                     <h3 className="text-sm font-bold text-gray-800">📊 월별 순증 추이 (신규 및 해지)</h3>
-                                    <select value={chartManager} onChange={e => setChartManager(e.target.value)} className="text-xs p-1.5 border rounded-lg bg-gray-50 text-gray-600 font-bold outline-none cursor-pointer hover:bg-gray-100 transition-all"><option>전체 담당자</option><option>이원식</option><option>강현준</option></select>
+                                    <select value={chartManager} onChange={e => setChartManager(e.target.value)} className="text-xs p-1.5 border rounded-lg bg-gray-50 text-gray-600 font-bold outline-none cursor-pointer hover:bg-gray-100 transition-all">
+                                        <option>전체 담당자</option>
+                                        {staffList.map(s => <option key={s}>{s}</option>)}
+                                    </select>
                                 </div>
                                 <div className="flex gap-3 text-[11px] font-bold text-gray-500">
                                     <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-[#0B5E4D] rounded-sm"></span> 신규</span><span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-rose-700 rounded-sm"></span> 해지</span>
@@ -462,6 +489,7 @@
                                     
                                     <select value={filterCollection} onChange={e => setFilterCollection(e.target.value)} className="text-xs p-2.5 rounded-xl border bg-white outline-none font-bold text-red-600"><option value="" className="text-gray-600">수금 상태 전체</option><option value="미수금">🚨 미수금 업체만</option><option value="수금완료">수금 완료</option></select>
                                     
+                                    <button onClick={() => setIsStaffModalOpen(true)} className="bg-white text-gray-600 font-bold border border-gray-200 text-xs px-4 py-2.5 rounded-xl hover:bg-gray-50 shadow-sm whitespace-nowrap">⚙️ 대원 관리</button>
                                     <button onClick={() => { setIsModalOpen(true); setRegError(""); }} className="bg-[#0B5E4D] text-white font-bold text-xs px-4 py-2.5 rounded-xl hover:opacity-95 shadow-sm whitespace-nowrap">+ 신규 등록</button>
                                 </div>
 
@@ -563,7 +591,11 @@
                                                             <label className="col-span-1"><b>대표자명 (선택)</b><input value={editForm.clientRepName || ""} onChange={e=>setEditForm({...editForm, clientRepName: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="업체 대표 이름" /></label>
                                                             <label className="col-span-1"><b>사업자번호 (선택)</b><input value={editForm.bizNumber || ""} onChange={e=>setEditForm({...editForm, bizNumber: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="숫자만 입력" /></label>
                                                             
-                                                            <label className="col-span-1"><b>담당 대원 *</b><select value={editForm.manager || ""} onChange={e=>setEditForm({...editForm, manager: e.target.value})} className="border p-2 w-full rounded outline-none">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
+                                                            <label className="col-span-1"><b>담당 대원 *</b>
+                                                                <select value={editForm.manager || ""} onChange={e=>setEditForm({...editForm, manager: e.target.value})} className="border p-2 w-full rounded outline-none">
+                                                                    {Array.from(new Set([...staffList, editForm.manager])).filter(Boolean).map(s=><option key={s}>{s}</option>)}
+                                                                </select>
+                                                            </label>
                                                             <label className="col-span-1"><b>연락처 *</b><input value={editForm.phone || ""} onChange={e=>setEditForm({...editForm, phone: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="필수 입력" /></label>
                                                             
                                                             <label className="col-span-2 flex gap-2">
@@ -571,8 +603,6 @@
                                                                 <div className="flex-1"><b>구/군 *</b><select value={editForm.dong || ""} onChange={e=>setEditForm({...editForm, dong: e.target.value})} className="border p-2 w-full rounded-lg mt-1 bg-white">{REGIONS[editForm.gu || "부산"].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
                                                             </label>
                                                             <label className="col-span-2"><b>상세 주소 *</b><input value={editForm.address || ""} onChange={e=>setEditForm({...editForm, address: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="필수 입력" /></label>
-                                                            
-                                                            {/* 💡 증명서 관련 입력칸 싹 삭제됨 */}
                                                             
                                                             <label className="col-span-2 text-blue-800 font-bold border-t pt-2 mt-2">🏃‍♂️ 현장 출동 체크리스트</label>
                                                             <label className="col-span-1"><b>주차 공간</b><select value={editForm.parking || "O"} onChange={e=>setEditForm({...editForm, parking: e.target.value})} className="w-full p-2 border rounded-lg mt-1"><option value="O">O (가능)</option><option value="X">X (불가/어려움)</option><option value="△">△ (협소/확인필요)</option></select></label>
@@ -615,8 +645,6 @@
                                                                 <span className="font-sans text-gray-500 text-[11px] ml-3 font-normal">대표: <span className="font-bold">{selectedItem.clientRepName || "미기입"}</span></span>
                                                             </p>
                                                         </div>
-                                                        
-                                                        {/* 💡 증명서 관련 안내 박스 완전 삭제됨 */}
 
                                                         <div className="col-span-2 p-3 bg-white rounded-xl border border-gray-200 mb-1 mt-1 shadow-sm">
                                                             <p className="text-gray-700 font-bold mb-2">🏃‍♂️ 현장 출동 정보 요약</p>
@@ -673,7 +701,7 @@
 
                                                 {!showPayForm && (
                                                     <button onClick={() => {
-                                                        setPayForm({ month: CURRENT_MONTH, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "" });
+                                                        setPayForm({ month: TODAY, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "" });
                                                         setEditingPayId(null);
                                                         setShowPayForm(true);
                                                     }} className="w-full bg-amber-50 text-amber-800 font-bold text-xs py-3 rounded-xl border border-amber-200 hover:bg-amber-100">+ 새로운 수금 기록 추가</button>
@@ -682,10 +710,10 @@
                                                 {showPayForm && (
                                                     <form onSubmit={handleAddPayment} className={`border p-4 rounded-2xl shadow-sm space-y-4 text-xs ${editingPayId ? 'bg-indigo-50/30 border-indigo-200' : 'bg-amber-50/30 border-amber-100'}`}>
                                                         <p className={`font-bold border-b pb-2 ${editingPayId ? 'text-indigo-800 border-indigo-200' : 'text-amber-900 border-amber-200'}`}>
-                                                            {editingPayId ? "✏️ 수금 내역 수정 (미수금 상환)" : "💰 월별 수금 기록 추가"}
+                                                            {editingPayId ? "✏️ 수금 내역 수정 (미수금 상환)" : "💰 일별 수금 기록 추가"}
                                                         </p>
                                                         <div className="grid grid-cols-2 gap-3">
-                                                            <label className="block"><b>수금 월</b><input type="month" value={payForm.month} onChange={e => setPayForm({...payForm, month: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" required /></label>
+                                                            <label className="block"><b>수금 일자</b><input type="date" value={payForm.month} onChange={e => setPayForm({...payForm, month: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" required /></label>
                                                             
                                                             <label className="block"><b>수금 상태</b>
                                                                 <select 
@@ -752,7 +780,6 @@
                                             <div className="space-y-4 animate-fade-in">
                                                 {!showHistoryForm && (
                                                     <button onClick={() => {
-                                                        // 💡 [핵심 업데이트] 새로운 기록 추가 시 출동대원이 '업체 담당 대원'으로 알아서 세팅됨!
                                                         setHistoryForm({ date: TODAY, time: "", type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: selectedItem.manager });
                                                         setEditingHistoryId(null);
                                                         setShowHistoryForm(true);
@@ -766,11 +793,15 @@
                                                         </p>
                                                         <div className="grid grid-cols-2 gap-3">
                                                             <label className="block"><b>방역 일자</b><input type="date" value={historyForm.date} onChange={e => setHistoryForm({...historyForm, date: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" /></label>
-                                                            <label className="block"><b>출동대원</b><select value={historyForm.author} onChange={e => setHistoryForm({...historyForm, author: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white">{STAFF.map(s => <option key={s}>{s}</option>)}</select></label>
+                                                            <label className="block"><b>출동대원</b>
+                                                                <select value={historyForm.author} onChange={e => setHistoryForm({...historyForm, author: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white">
+                                                                    {Array.from(new Set([...staffList, historyForm.author])).filter(Boolean).map(s => <option key={s}>{s}</option>)}
+                                                                </select>
+                                                            </label>
                                                         </div>
                                                         
                                                         <div className="mt-3 bg-gray-50 border p-3 rounded-xl">
-                                                            <label className="block text-gray-700"><b>⏰ 방문/진행 시간</b><input type="time" step="600" value={historyForm.time || ""} onChange={e => setHistoryForm({...historyForm, time: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white shadow-sm" /></label>
+                                                            <label className="block text-gray-700"><b>⏰ 방문/진행 시간</b><input type="time" step="1800" value={historyForm.time || ""} onChange={e => setHistoryForm({...historyForm, time: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white shadow-sm" /></label>
                                                         </div>
 
                                                         <div>
@@ -926,6 +957,34 @@
                         </div>
                     </div>
 
+                    {/* 💡 대원 추가/삭제 관리 팝업 */}
+                    {isStaffModalOpen && (
+                        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-fade-in">
+                                <div className="flex justify-between items-center mb-5">
+                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">🧑‍🔧 출동대원 관리</h3>
+                                    <button onClick={() => setIsStaffModalOpen(false)} className="text-2xl font-bold text-gray-400 hover:text-black">×</button>
+                                </div>
+                                <div className="flex gap-2 mb-4">
+                                    <input type="text" value={newStaffInput} onChange={e => setNewStaffInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddStaff()} placeholder="새 대원 이름 입력" className="flex-1 p-2.5 border border-gray-300 rounded-xl outline-none text-sm font-medium" />
+                                    <button onClick={handleAddStaff} className="bg-[#0B5E4D] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:opacity-90 transition-all">추가</button>
+                                </div>
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                    {staffList.map(staff => (
+                                        <div key={staff} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                            <span className="font-bold text-sm text-gray-700">{staff}</span>
+                                            <button onClick={() => handleDeleteStaff(staff)} className="text-xs text-red-500 font-bold bg-white border border-red-200 px-3 py-1.5 rounded-lg shadow-sm hover:bg-red-500 hover:text-white transition-all">삭제</button>
+                                        </div>
+                                    ))}
+                                    {staffList.length === 0 && <p className="text-center text-xs text-gray-400 py-4">등록된 대원이 없습니다.</p>}
+                                </div>
+                                <div className="mt-5 p-3 bg-blue-50 rounded-xl border border-blue-100">
+                                    <p className="text-[11px] text-blue-700 leading-relaxed font-medium">💡 목록에서 대원을 삭제하더라도, 기존 방역 기록에 남겨진 이름이나 이전 업체의 담당자 정보는 <b>삭제되지 않고 그대로 유지</b>됩니다.</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* 소독증명서 출력 (관리자 화면용) */}
                     {isCertOpen && selectedItem && certEntry && (
                         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:bg-white print:p-0">
@@ -953,7 +1012,6 @@
                                                 <td className="border border-black p-5 bg-gray-50 font-bold text-center text-[14px]" colSpan="2">관리(운영)자 확인</td>
                                                 <td className="border border-black p-4 text-[14px]" colSpan="3">
                                                     <div className="flex justify-between pr-8">
-                                                        {/* 💡 [핵심] 직위는 무조건 매니저, 성명은 무조건 출동대원(author)으로 완전 자동 고정! */}
                                                         <span>직위 : 매니저</span>
                                                         <span>성명 : {certEntry.author}</span>
                                                     </div>
