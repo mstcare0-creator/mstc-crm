@@ -34,19 +34,50 @@
         const CURRENT_MONTH_NUM = parseInt(CURRENT_MONTH.split('-')[1], 10);
         const CYCLES = ["월1회", "3개월1회", "단기"];
         const CHEMICALS_BY_TYPE = { "살균": ["마이크로켐 골드", "키니아 비실드"], "살충": ["롱다운플러스", "맥스포스 셀렉트 이지갤", "다발이끔 살서제"] };
+        
+        // 💡 부산에 '해운대구' 추가 완료!
         const REGIONS = { 
-            "부산": ["강서구", "금정구", "기장군", "남구", "동구", "동래구", "부산진구", "북구", "사상구", "사하구", "서구", "수영구", "연제구", "영도구", "중구"],
+            "부산": ["강서구", "금정구", "기장군", "남구", "동구", "동래구", "부산진구", "북구", "사상구", "사하구", "서구", "수영구", "연제구", "영도구", "중구", "해운대구"],
             "창원": ["의창구", "성산구", "마산합포구", "마산회원구", "진해구"],
             "경남": ["양산시", "김해시"] 
         };
 
         const COMPANY_SEAL_URL = "https://mstcare0-creator.github.io/mstc-crm/seal.png"; 
 
+        // 💡 엑셀 복붙 시 빈칸/에러 방지를 위한 강력한 데이터 보정 함수
+        const normalizeData = (rawData) => {
+            if (!Array.isArray(rawData)) return [];
+            return rawData.map(item => {
+                let parsedHistory = [];
+                if (Array.isArray(item.history)) parsedHistory = item.history;
+                else if (typeof item.history === 'string') {
+                    if (item.history.trim() !== "") {
+                        try { parsedHistory = JSON.parse(item.history); } catch(e) { parsedHistory = []; }
+                    }
+                }
+
+                let parsedPayment = [];
+                if (Array.isArray(item.paymentHistory)) parsedPayment = item.paymentHistory;
+                else if (typeof item.paymentHistory === 'string') {
+                    if (item.paymentHistory.trim() !== "") {
+                        try { parsedPayment = JSON.parse(item.paymentHistory); } catch(e) { parsedPayment = []; }
+                    }
+                }
+
+                return {
+                    ...item,
+                    history: parsedHistory,
+                    paymentHistory: parsedPayment,
+                    fee: String(item.fee || "0").replace(/,/g, ''),
+                    uncollectedAmount: String(item.uncollectedAmount || "0").replace(/,/g, '')
+                };
+            });
+        };
+
         function App() {
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
 
-            // 출동대원 관리
             const [staffList, setStaffList] = useState(() => {
                 const saved = localStorage.getItem("mstc_staff_list_v1");
                 return saved ? JSON.parse(saved) : ["이원식", "강현준"];
@@ -59,18 +90,20 @@
                 fetch(GOOGLE_SCRIPT_URL)
                     .then(res => res.json())
                     .then(fetchedData => {
-                        if (Array.isArray(fetchedData) && fetchedData.length > 0) {
-                            setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v38", JSON.stringify(fetchedData));
+                        // 💡 가져온 데이터를 완벽하게 보정(Normalize)하여 에러 원천 차단
+                        const normData = normalizeData(fetchedData);
+                        if (normData.length > 0) {
+                            setData(normData);
+                            localStorage.setItem("mstc_crm_data_v38", JSON.stringify(normData));
                         } else {
                             const local = localStorage.getItem("mstc_crm_data_v38");
-                            if(local) setData(JSON.parse(local));
+                            if(local) setData(normalizeData(JSON.parse(local)));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
                         const local = localStorage.getItem("mstc_crm_data_v38");
-                        if(local) setData(JSON.parse(local));
+                        if(local) setData(normalizeData(JSON.parse(local)));
                         setLoading(false);
                     });
             }, []);
@@ -115,7 +148,6 @@
             const [payForm, setPayForm] = useState({ month: TODAY, amount: "30000", status: "수금완료", method: "계좌이체", note: "" });
             const [editingPayId, setEditingPayId] = useState(null);
 
-            // 💡 자동 스크롤을 위한 레퍼런스(참조)
             const historyFormRef = useRef(null);
             const payFormRef = useRef(null);
 
@@ -228,23 +260,18 @@
                     bizNumber: fd.get("bizNumber") || "", 
                     clientRepName: fd.get("clientRepName") || "", 
                     gu: fd.get("gu"), dong: fd.get("dong"), address: address, 
-                    
-                    // 💡 신규 폼에서 입력받은 정보 매핑
                     area: fd.get("area") || "",
                     contractStart: fd.get("contractStart") || TODAY, 
                     fee: fd.get("fee") || "", 
-                    
                     serviceType: fd.get("serviceType") || "정기", payStatus: payStat || "유료",
                     cycle: fd.get("cycle") || "월1회", 
                     payMethod: fd.get("payMethod") || "계좌이체",
                     providedService: fd.get("providedService") || "",
-                    
                     parking: fd.get("parking") || "O",
                     photoReq: fd.get("photoReq") || "X",
                     bugZapper: fd.get("bugZapper") || "없음",
                     trapReq: fd.get("trapReq") || "X",
                     keyInfo: fd.get("keyInfo") || "",
-
                     etcInfo: fd.get("etcInfo") || "",
                     collectionStatus: fd.get("collectionStatus") || "수금완료", uncollectedAmount: fd.get("uncollectedAmount") || "0",
                     history: [{id: Date.now(), date: TODAY, time: "", type: "상담", content: "신규 등록 완료", author: fd.get("manager")}], paymentHistory: []
@@ -1033,7 +1060,6 @@
                                         </label>
                                         <label className="col-span-2"><b>상세 주소 *</b><input name="address" className="border p-2 w-full rounded-lg mt-1 outline-none" placeholder="건물명, 층수 등 상세 입력" /></label>
                                         
-                                        {/* 💡 새로 추가된 핵심 계약 정보 영역 */}
                                         <div className="col-span-2 border-t pt-3 mt-1 grid grid-cols-2 gap-4">
                                             <label className="col-span-2 md:col-span-1 text-blue-800"><b>평수(면적)</b>
                                                 <input type="number" name="area" className="border p-2 w-full rounded-lg mt-1 outline-none font-normal text-black" placeholder="예: 30" />
