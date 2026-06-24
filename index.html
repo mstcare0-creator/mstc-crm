@@ -97,15 +97,15 @@
                         const normData = normalizeData(fetchedData);
                         if (normData.length > 0) {
                             setData(normData);
-                            localStorage.setItem("mstc_crm_data_v38", JSON.stringify(normData));
+                            localStorage.setItem("mstc_crm_data_v99", JSON.stringify(normData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v38");
+                            const local = localStorage.getItem("mstc_crm_data_v99");
                             if(local) setData(normalizeData(JSON.parse(local)));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v38");
+                        const local = localStorage.getItem("mstc_crm_data_v99");
                         if(local) setData(normalizeData(JSON.parse(local)));
                         setLoading(false);
                     });
@@ -113,7 +113,7 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v38", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v99", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
