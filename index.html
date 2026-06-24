@@ -24,7 +24,8 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useMemo, useEffect } = React;
+        // 💡 useRef 추가됨 (자동 스크롤용)
+        const { useState, useMemo, useEffect, useRef } = React;
         
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyJUCIKiumzq3QbFjZzSQq6mKWdw03AXCja8oH2mClGwUN6cv8CKJehdJLlkNHACqEY/exec"; 
 
@@ -46,7 +47,7 @@
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
 
-            // 💡 출동대원 동적 관리 State
+            // 출동대원 관리
             const [staffList, setStaffList] = useState(() => {
                 const saved = localStorage.getItem("mstc_staff_list_v1");
                 return saved ? JSON.parse(saved) : ["이원식", "강현준"];
@@ -101,9 +102,10 @@
 
             const [isEditing, setIsEditing] = useState(false);
             const [editForm, setEditForm] = useState({});
+            
+            // 💡 신규 등록 팝업창 관리용 State
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [regCity, setRegCity] = useState("부산");
-
             const [regError, setRegError] = useState("");
             const [editError, setEditError] = useState("");
 
@@ -114,6 +116,24 @@
             const [showPayForm, setShowPayForm] = useState(false);
             const [payForm, setPayForm] = useState({ month: TODAY, amount: "30000", status: "수금완료", method: "계좌이체", note: "" });
             const [editingPayId, setEditingPayId] = useState(null);
+
+            // 💡 자동 스크롤을 위한 레퍼런스(참조)
+            const historyFormRef = useRef(null);
+            const payFormRef = useRef(null);
+
+            // 방역 기록 수정 시 자동 스크롤
+            useEffect(() => {
+                if (showHistoryForm && historyFormRef.current) {
+                    historyFormRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, [showHistoryForm]);
+
+            // 수금 내역 수정 시 자동 스크롤
+            useEffect(() => {
+                if (showPayForm && payFormRef.current) {
+                    payFormRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, [showPayForm]);
 
             const [customMethodInput, setCustomMethodInput] = useState("");
             const [customMethodsList, setCustomMethodsList] = useState(() => {
@@ -139,7 +159,7 @@
             const [certNumber, setCertNumber] = useState("");
             const [sealImgFailed, setSealImgFailed] = useState(false); 
 
-            // 💡 대원 추가/삭제 핸들러
+            // 대원 추가/삭제 핸들러
             const handleAddStaff = () => {
                 const val = newStaffInput.trim();
                 if (val && !staffList.includes(val)) {
@@ -212,9 +232,9 @@
                     name: name, manager: fd.get("manager"), phone: phone,
                     bizNumber: fd.get("bizNumber") || "", 
                     clientRepName: fd.get("clientRepName") || "", 
-                    gu: fd.get("gu"), dong: fd.get("dong"), address: address, area: fd.get("area"),
-                    contractStart: fd.get("contractStart") || TODAY, serviceType: fd.get("serviceType"), payStatus: payStat,
-                    cycle: fd.get("cycle"), fee: fd.get("fee") || "30000", 
+                    gu: fd.get("gu"), dong: fd.get("dong"), address: address, area: fd.get("area") || "30",
+                    contractStart: fd.get("contractStart") || TODAY, serviceType: fd.get("serviceType") || "정기", payStatus: payStat || "유료",
+                    cycle: fd.get("cycle") || "월1회", fee: fd.get("fee") || "30000", 
                     payMethod: fd.get("payMethod") || "계좌이체",
                     providedService: fd.get("providedService") || "",
                     
@@ -275,7 +295,7 @@
             };
 
             const handleEditHistoryInit = (h) => {
-                setHistoryForm({ date: h.date, time: h.time || h.startTime || "", type: h.type, author: h.author || selectedItem.manager, methods: h.methods || [], chemicals: h.chemicals || [], note: h.type === "방역" ? "" : h.content });
+                setHistoryForm({ date: h.date, time: h.time || h.startTime || "", type: h.type || "방역", author: h.author || selectedItem.manager, methods: h.methods || [], chemicals: h.chemicals || [], note: h.type === "방역" ? "" : h.content });
                 setEditingHistoryId(h.id); setShowHistoryForm(true); setShowPayForm(false); setIsEditing(false);
             };
 
@@ -359,10 +379,7 @@
             }, [enrichedData, currentTab, search, filterCity, filterDistrict, filterServiceType, filterCollection, filterCompletion]);
 
             const activeData = enrichedData.filter(d => d.tab === 'active');
-            
-            // 💡 담당자별 동적 카운트 계산
             const staffCountsText = staffList.map(staff => `${staff} ${activeData.filter(d => d.manager === staff).length}`).join(" · ");
-            
             const completedThisMonth = activeData.filter(c => c.history && c.history.some(h => h.type === '방역' && h.date && h.date.startsWith(CURRENT_MONTH))).length;
             const delayedThisMonth = activeData.length - completedThisMonth;
             const activeLikeCount = enrichedData.filter(d => d.tab === 'active' || d.tab === 'paused').length;
@@ -707,8 +724,9 @@
                                                     }} className="w-full bg-amber-50 text-amber-800 font-bold text-xs py-3 rounded-xl border border-amber-200 hover:bg-amber-100">+ 새로운 수금 기록 추가</button>
                                                 )}
 
+                                                {/* 💡 수금내역 수정 폼 - ref 적용됨 */}
                                                 {showPayForm && (
-                                                    <form onSubmit={handleAddPayment} className={`border p-4 rounded-2xl shadow-sm space-y-4 text-xs ${editingPayId ? 'bg-indigo-50/30 border-indigo-200' : 'bg-amber-50/30 border-amber-100'}`}>
+                                                    <form ref={payFormRef} onSubmit={handleAddPayment} className={`border p-4 rounded-2xl shadow-sm space-y-4 text-xs ${editingPayId ? 'bg-indigo-50/30 border-indigo-200' : 'bg-amber-50/30 border-amber-100'}`}>
                                                         <p className={`font-bold border-b pb-2 ${editingPayId ? 'text-indigo-800 border-indigo-200' : 'text-amber-900 border-amber-200'}`}>
                                                             {editingPayId ? "✏️ 수금 내역 수정 (미수금 상환)" : "💰 일별 수금 기록 추가"}
                                                         </p>
@@ -754,8 +772,8 @@
                                                     {filteredPayment.map((p) => (
                                                         <div key={p.id} className={`p-4 bg-white border border-gray-200 rounded-2xl text-xs space-y-1 relative group transition-all ${editingPayId === p.id ? 'bg-indigo-50/50 border-indigo-300' : 'hover:border-amber-300'}`}>
                                                             <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <button onClick={() => handleEditPayInit(p)} className="text-gray-500 hover:text-indigo-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">✏️ 수정</button>
-                                                                <button onClick={() => handleDeletePayment(p.id)} className="text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
+                                                                <button type="button" onClick={(e) => { e.stopPropagation(); handleEditPayInit(p); }} className="text-gray-500 hover:text-indigo-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">✏️ 수정</button>
+                                                                <button type="button" onClick={(e) => { e.stopPropagation(); handleDeletePayment(p.id); }} className="text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
                                                             </div>
                                                             <div className="flex justify-between items-center mb-1 pr-24">
                                                                 <span className={`font-bold text-sm ${p.status === '미수금' ? 'text-red-600' : p.status === '무료' ? 'text-emerald-600' : 'text-blue-600'}`}>
@@ -786,8 +804,9 @@
                                                     }} className="w-full bg-emerald-50 text-emerald-800 font-bold text-xs py-3 rounded-xl border border-emerald-200 hover:bg-emerald-100">+ 새로운 방역 기록 추가</button>
                                                 )}
 
+                                                {/* 💡 방역 기록 수정 폼 - ref 적용됨 */}
                                                 {showHistoryForm && (
-                                                    <form onSubmit={handleAddHistory} className={`border p-4 rounded-2xl shadow-sm space-y-4 text-xs ${editingHistoryId ? 'bg-blue-50/30 border-blue-200' : 'bg-emerald-50/30 border-emerald-100'}`}>
+                                                    <form ref={historyFormRef} onSubmit={handleAddHistory} className={`border p-4 rounded-2xl shadow-sm space-y-4 text-xs ${editingHistoryId ? 'bg-blue-50/30 border-blue-200' : 'bg-emerald-50/30 border-emerald-100'}`}>
                                                         <p className={`font-bold border-b pb-2 ${editingHistoryId ? 'text-blue-800 border-blue-200' : 'text-emerald-800 border-emerald-200'}`}>
                                                             {editingHistoryId ? "✏️ 현장 방역 기록 수정" : "📝 현장 방역 기록 추가"}
                                                         </p>
@@ -923,8 +942,8 @@
                                                     {filteredHistory.map((h) => (
                                                         <div key={h.id} className={`p-4 border rounded-2xl text-xs space-y-1 relative group transition-all ${editingHistoryId === h.id ? 'bg-blue-50/50 border-blue-300' : 'bg-white border-gray-200 hover:border-[#0B5E4D]'}`}>
                                                             <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <button onClick={() => handleEditHistoryInit(h)} className="text-gray-500 hover:text-blue-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">✏️ 수정</button>
-                                                                <button onClick={() => handleDeleteHistory(h.id)} className="text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
+                                                                <button type="button" onClick={(e) => { e.stopPropagation(); handleEditHistoryInit(h); }} className="text-gray-500 hover:text-blue-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">✏️ 수정</button>
+                                                                <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteHistory(h.id); }} className="text-gray-400 hover:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
                                                             </div>
                                                             <div className="flex justify-between items-center mb-1 pr-24">
                                                                 <span className="font-bold text-emerald-800 text-sm">✅ {h.type} 완료</span>
@@ -957,7 +976,7 @@
                         </div>
                     </div>
 
-                    {/* 💡 대원 추가/삭제 관리 팝업 */}
+                    {/* 대원 관리 팝업 */}
                     {isStaffModalOpen && (
                         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
                             <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-fade-in">
@@ -981,6 +1000,49 @@
                                 <div className="mt-5 p-3 bg-blue-50 rounded-xl border border-blue-100">
                                     <p className="text-[11px] text-blue-700 leading-relaxed font-medium">💡 목록에서 대원을 삭제하더라도, 기존 방역 기록에 남겨진 이름이나 이전 업체의 담당자 정보는 <b>삭제되지 않고 그대로 유지</b>됩니다.</p>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 💡 복구된 신규 거래처 등록 팝업 */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-3xl p-6 w-full max-w-2xl shadow-2xl overflow-y-auto max-h-[90vh] animate-fade-in">
+                                <div className="flex justify-between items-center mb-5 border-b pb-3">
+                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">✨ 신규 거래처/영업처 등록</h3>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-2xl font-bold text-gray-400 hover:text-black">×</button>
+                                </div>
+                                <form onSubmit={handleRegister} className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <label className="col-span-2 md:col-span-1"><b>등록 상태 *</b>
+                                            <select name="tab" className="border p-2 w-full rounded-lg mt-1 outline-none font-bold text-[#0B5E4D] bg-emerald-50">
+                                                <option value="active">🟢 방역 거래처 (계약완료)</option>
+                                                <option value="prospect">🟡 영업처 (상담/보류)</option>
+                                            </select>
+                                        </label>
+                                        <label className="col-span-2 md:col-span-1"><b>담당 대원 *</b>
+                                            <select name="manager" className="border p-2 w-full rounded-lg mt-1 outline-none bg-white">
+                                                {staffList.map(s => <option key={s}>{s}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="col-span-2 md:col-span-1"><b>상호명 *</b><input name="name" className="border p-2 w-full rounded-lg mt-1 outline-none" placeholder="예: 스타벅스 강남점" /></label>
+                                        <label className="col-span-2 md:col-span-1"><b>연락처 *</b><input name="phone" className="border p-2 w-full rounded-lg mt-1 outline-none" placeholder="010-0000-0000" /></label>
+                                        
+                                        <label className="col-span-2 flex gap-2">
+                                            <div className="flex-1"><b>시/도 *</b><select value={regCity} onChange={e => setRegCity(e.target.value)} name="gu" className="border p-2 w-full rounded-lg mt-1 bg-white outline-none">{Object.keys(REGIONS).map(r=><option key={r}>{r}</option>)}</select></div>
+                                            <div className="flex-1"><b>구/군 *</b><select name="dong" className="border p-2 w-full rounded-lg mt-1 bg-white outline-none">{REGIONS[regCity].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
+                                        </label>
+                                        <label className="col-span-2"><b>상세 주소 *</b><input name="address" className="border p-2 w-full rounded-lg mt-1 outline-none" placeholder="건물명, 층수 등 상세 입력" /></label>
+                                    </div>
+                                    
+                                    <div className="mt-6 pt-4 border-t flex justify-between items-center">
+                                        <span className="text-red-500 font-bold text-xs">{regError}</span>
+                                        <div className="flex gap-2">
+                                            <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-200">취소</button>
+                                            <button type="submit" className="px-6 py-2 bg-[#0B5E4D] text-white rounded-xl text-sm font-bold shadow-md hover:opacity-90">등록 완료</button>
+                                        </div>
+                                    </div>
+                                </form>
                             </div>
                         </div>
                     )}
