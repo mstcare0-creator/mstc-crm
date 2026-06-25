@@ -43,7 +43,6 @@
 
         const COMPANY_SEAL_URL = "https://mstcare0-creator.github.io/mstc-crm/seal.png"; 
 
-        // 💡 데이터 보정 함수: tab이 없거나 빈칸이면 무조건 'active(운영중)'로 띄워주도록 수정
         const normalizeData = (rawData) => {
             if (!Array.isArray(rawData)) return [];
             return rawData.map(item => {
@@ -63,35 +62,17 @@
                     }
                 }
 
-                // tab이 없거나, status 열만 있는 경우를 위한 보정 로직
                 let validTab = item.tab || item.status || "active";
-                if (validTab.trim() === "") validTab = "active"; // 빈칸이면 강제로 active
-
-                // 날짜 정규화 함수
-                const fixDate = (d) => {
-                    if (!d) return "";
-                    const s = String(d);
-                    // 이미 YYYY-MM-DD 형식이면 그대로
-                    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
-                    // 구글 시트 Date 객체 문자열이면 파싱
-                    const parsed = new Date(s);
-                    if (!isNaN(parsed.getTime())) {
-                        const y = parsed.getFullYear();
-                        const m = String(parsed.getMonth()+1).padStart(2,'0');
-                        const dd = String(parsed.getDate()).padStart(2,'0');
-                        return y+"-"+m+"-"+dd;
-                    }
-                    return s;
-                };
+                if (validTab.trim() === "") validTab = "active"; 
 
                 return {
                     ...item,
-                    tab: validTab, // 여기서 tab을 강제 생성 및 주입!
+                    tab: validTab, 
                     history: parsedHistory,
                     paymentHistory: parsedPayment,
                     fee: String(item.fee || "0").replace(/,/g, ''),
                     uncollectedAmount: String(item.uncollectedAmount || "0").replace(/,/g, ''),
-                    contractStart: fixDate(item.contractStart)
+                    terminationDate: item.terminationDate || "" // 💡 해지일 보정 로직 추가
                 };
             });
         };
@@ -115,15 +96,15 @@
                         const normData = normalizeData(fetchedData);
                         if (normData.length > 0) {
                             setData(normData);
-                            localStorage.setItem("mstc_crm_data_v99", JSON.stringify(normData));
+                            localStorage.setItem("mstc_crm_data_v38", JSON.stringify(normData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v99");
+                            const local = localStorage.getItem("mstc_crm_data_v38");
                             if(local) setData(normalizeData(JSON.parse(local)));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v99");
+                        const local = localStorage.getItem("mstc_crm_data_v38");
                         if(local) setData(normalizeData(JSON.parse(local)));
                         setLoading(false);
                     });
@@ -131,7 +112,7 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v99", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v38", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
@@ -295,6 +276,7 @@
                     keyInfo: fd.get("keyInfo") || "",
                     etcInfo: fd.get("etcInfo") || "",
                     collectionStatus: fd.get("collectionStatus") || "수금완료", uncollectedAmount: fd.get("uncollectedAmount") || "0",
+                    terminationDate: "", // 신규등록시 일단 비워둠
                     history: [{id: Date.now(), date: TODAY, time: "", type: "상담", content: "신규 등록 완료", author: fd.get("manager")}], paymentHistory: []
                 };
                 updateDataAndSync([safeData, ...data]); 
@@ -648,6 +630,14 @@
                                                     <button onClick={convertToActive} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-sm font-bold shadow-sm animate-pulse mb-2">🎉 계약 성공 (방역 거래처로 전환)</button>
                                                 )}
 
+                                                {/* 💡 (읽기 모드) 해지 업체인 경우 눈에 띄게 해지 정보 띄워주기 */}
+                                                {!isEditing && selectedItem.tab === 'terminated' && (
+                                                    <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl mb-3 shadow-sm">
+                                                        <p className="text-rose-700 font-bold text-[11px] mb-1">🛑 해지 처리된 거래처입니다.</p>
+                                                        <p className="text-gray-800 font-bold text-xs">해지 일자: <span className="font-mono text-rose-600">{selectedItem.terminationDate || "미기입"}</span></p>
+                                                    </div>
+                                                )}
+
                                                 {isEditing ? (
                                                     <form onSubmit={handleSaveEdit} className="bg-gray-50 p-4 rounded-2xl border space-y-3">
                                                         <h4 className="font-bold text-sm border-b pb-2 mb-2">✏️ 업체 정보 수정</h4>
@@ -684,10 +674,26 @@
                                                             <label>방역주기 <select value={editForm.cycle || "월1회"} onChange={e=>setEditForm({...editForm, cycle: e.target.value})} className="border p-2 w-full rounded outline-none">{CYCLES.map(c=><option key={c}>{c}</option>)}</select></label>
                                                             <label>방역구분 <select value={editForm.serviceType || "정기"} onChange={e=>setEditForm({...editForm, serviceType: e.target.value})} className="border p-2 w-full rounded outline-none"><option>정기</option><option>분기</option><option>무료</option></select></label>
                                                             <label>결제방식 <select value={editForm.payMethod || "계좌이체"} onChange={e=>setEditForm({...editForm, payMethod: e.target.value})} className="border p-2 w-full rounded outline-none"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>기타</option></select></label>
-                                                            <label>결제상태 <select value={editForm.payStatus || "유료"} onChange={e=>setEditForm({...editForm, payStatus: e.target.value})} className="border p-2 w-full rounded outline-none bg-amber-50 font-bold text-amber-900"><option value="유료">유료</option><option value="무료">무료</option><option value="일시중지">일시중지</option><option value="해지">해지</option></select></label>
+                                                            
+                                                            <label>결제상태 
+                                                                <select value={editForm.payStatus || "유료"} onChange={e=>{
+                                                                    const newStatus = e.target.value;
+                                                                    setEditForm({...editForm, payStatus: newStatus, tab: newStatus === "해지" ? "terminated" : (newStatus === "일시중지" ? "paused" : editForm.tab)});
+                                                                }} className="border p-2 w-full rounded outline-none bg-amber-50 font-bold text-amber-900">
+                                                                    <option value="유료">유료</option><option value="무료">무료</option><option value="일시중지">일시중지</option><option value="해지">해지</option>
+                                                                </select>
+                                                            </label>
+
                                                             <label>수금상태 <select value={editForm.collectionStatus || "수금완료"} onChange={e=>setEditForm({...editForm, collectionStatus: e.target.value})} className="border p-2 w-full rounded outline-none font-bold text-rose-700"><option value="수금완료">수금완료</option><option value="미수금">🚨 미수금 발생</option></select></label>
                                                             
-                                                            <label className="col-span-2">제공 서비스 <input value={editForm.providedService || ""} onChange={e=>setEditForm({...editForm, providedService: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="예: 포충기 대여, 쥐 트랩 설치 등" /></label>
+                                                            {/* 💡 (수정 모드) 해지 선택 시에만 '해지일자' 달력 입력칸 등장! */}
+                                                            {(editForm.tab === 'terminated' || editForm.payStatus === '해지') && (
+                                                                <label className="col-span-2 text-rose-700 font-bold mt-2">해지일자 
+                                                                    <input type="date" value={editForm.terminationDate || ""} onChange={e=>setEditForm({...editForm, terminationDate: e.target.value})} className="border border-rose-300 p-2 w-full rounded outline-none bg-rose-50" />
+                                                                </label>
+                                                            )}
+
+                                                            <label className="col-span-2 mt-2">제공 서비스 <input value={editForm.providedService || ""} onChange={e=>setEditForm({...editForm, providedService: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="예: 포충기 대여, 쥐 트랩 설치 등" /></label>
 
                                                             {editForm.collectionStatus === "미수금" && (
                                                                 <label className="text-rose-700 font-bold col-span-2">업체 기본 미수금액 (원) <input type="number" step="5000" value={editForm.uncollectedAmount || ""} onChange={e=>setEditForm({...editForm, uncollectedAmount: e.target.value})} className="border border-rose-300 p-2 w-full rounded outline-none bg-rose-50" placeholder="숫자만 입력" /></label>
