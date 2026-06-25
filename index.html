@@ -43,27 +43,34 @@
 
         const COMPANY_SEAL_URL = "https://mstcare0-creator.github.io/mstc-crm/seal.png"; 
 
+        // 💡 엑셀 붙여넣기 완벽 보정 엔진 (payStatus 값을 읽어 tab을 똑똑하게 자동 분류!)
         const normalizeData = (rawData) => {
             if (!Array.isArray(rawData)) return [];
             return rawData.map(item => {
                 let parsedHistory = [];
                 if (Array.isArray(item.history)) parsedHistory = item.history;
-                else if (typeof item.history === 'string') {
-                    if (item.history.trim() !== "") {
-                        try { parsedHistory = JSON.parse(item.history); } catch(e) { parsedHistory = []; }
-                    }
+                else if (typeof item.history === 'string' && item.history.trim() !== "") {
+                    try { parsedHistory = JSON.parse(item.history); } catch(e) { parsedHistory = []; }
                 }
 
                 let parsedPayment = [];
                 if (Array.isArray(item.paymentHistory)) parsedPayment = item.paymentHistory;
-                else if (typeof item.paymentHistory === 'string') {
-                    if (item.paymentHistory.trim() !== "") {
-                        try { parsedPayment = JSON.parse(item.paymentHistory); } catch(e) { parsedPayment = []; }
-                    }
+                else if (typeof item.paymentHistory === 'string' && item.paymentHistory.trim() !== "") {
+                    try { parsedPayment = JSON.parse(item.paymentHistory); } catch(e) { parsedPayment = []; }
                 }
 
-                let validTab = item.tab || item.status || "active";
-                if (validTab.trim() === "") validTab = "active"; 
+                // 분류 지능: 명시된 tab이 없으면 payStatus(또는 status) 글자를 보고 자동 분류
+                let validTab = item.tab;
+                if (!validTab || validTab.trim() === "") {
+                    const statusText = (item.payStatus || item.status || "").trim();
+                    if (statusText === "해지") {
+                        validTab = "terminated";
+                    } else if (statusText === "일시정지" || statusText === "일시중지") {
+                        validTab = "paused";
+                    } else {
+                        validTab = "active"; // 그 외는 모두 운영중으로
+                    }
+                }
 
                 return {
                     ...item,
@@ -72,7 +79,7 @@
                     paymentHistory: parsedPayment,
                     fee: String(item.fee || "0").replace(/,/g, ''),
                     uncollectedAmount: String(item.uncollectedAmount || "0").replace(/,/g, ''),
-                    terminationDate: item.terminationDate || "" // 💡 해지일 보정 로직 추가
+                    terminationDate: item.terminationDate || ""
                 };
             });
         };
@@ -80,6 +87,7 @@
         function App() {
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
+            const [isSyncing, setIsSyncing] = useState(false); // 동기화(새로고침) 버튼 상태
 
             const [staffList, setStaffList] = useState(() => {
                 const saved = localStorage.getItem("mstc_staff_list_v1");
@@ -89,26 +97,46 @@
             const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
             const [newStaffInput, setNewStaffInput] = useState("");
 
-            useEffect(() => {
-                fetch(GOOGLE_SCRIPT_URL)
+            // 처음 데이터 불러오기
+            const loadData = (forceRefresh = false) => {
+                if (forceRefresh) setIsSyncing(true);
+                
+                // 강제 새로고침 시 로컬 캐시를 무시하기 위해 타임스탬프를 URL에 붙임
+                const fetchUrl = forceRefresh ? `${GOOGLE_SCRIPT_URL}?t=${Date.now()}` : GOOGLE_SCRIPT_URL;
+
+                fetch(fetchUrl)
                     .then(res => res.json())
                     .then(fetchedData => {
                         const normData = normalizeData(fetchedData);
                         if (normData.length > 0) {
                             setData(normData);
                             localStorage.setItem("mstc_crm_data_v38", JSON.stringify(normData));
-                        } else {
+                        } else if (!forceRefresh) {
                             const local = localStorage.getItem("mstc_crm_data_v38");
                             if(local) setData(normalizeData(JSON.parse(local)));
                         }
                         setLoading(false);
+                        setIsSyncing(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v38");
-                        if(local) setData(normalizeData(JSON.parse(local)));
+                        if (!forceRefresh) {
+                            const local = localStorage.getItem("mstc_crm_data_v38");
+                            if(local) setData(normalizeData(JSON.parse(local)));
+                        }
                         setLoading(false);
+                        setIsSyncing(false);
+                        if (forceRefresh) alert("데이터를 불러오는데 실패했습니다. 네트워크를 확인해주세요.");
                     });
+            };
+
+            useEffect(() => {
+                loadData();
             }, []);
+
+            // 수동으로 구글 시트 데이터 다시 끌어오기 (캐시 삭제)
+            const handleForceSync = () => {
+                loadData(true);
+            };
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
@@ -276,7 +304,7 @@
                     keyInfo: fd.get("keyInfo") || "",
                     etcInfo: fd.get("etcInfo") || "",
                     collectionStatus: fd.get("collectionStatus") || "수금완료", uncollectedAmount: fd.get("uncollectedAmount") || "0",
-                    terminationDate: "", // 신규등록시 일단 비워둠
+                    terminationDate: "",
                     history: [{id: Date.now(), date: TODAY, time: "", type: "상담", content: "신규 등록 완료", author: fd.get("manager")}], paymentHistory: []
                 };
                 updateDataAndSync([safeData, ...data]); 
@@ -459,6 +487,7 @@
             return (
                 <div>
                     <div className={`max-w-7xl mx-auto space-y-6 ${isCertOpen ? 'hidden print:hidden' : 'block'}`}>
+                        {/* 💡 최상단 헤더 영역에 동기화 버튼 추가! */}
                         <div className="flex justify-between items-end mb-4 pt-2 px-2">
                             <div>
                                 <h1 className="text-2xl font-bold flex items-center gap-2 text-[#0B5E4D]">
@@ -466,7 +495,17 @@
                                 </h1>
                                 <p className="text-xs text-gray-500 mt-1 font-bold">거래처 및 영업 관리 시스템</p>
                             </div>
-                            <div className="text-sm text-gray-400 font-mono font-bold tracking-wider">{TODAY.replace(/-/g, '.')} 기준</div>
+                            <div className="flex flex-col items-end gap-2">
+                                <div className="text-sm text-gray-400 font-mono font-bold tracking-wider">{TODAY.replace(/-/g, '.')} 기준</div>
+                                <button 
+                                    onClick={handleForceSync} 
+                                    disabled={isSyncing}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all flex items-center gap-1 border
+                                        ${isSyncing ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white text-[#0B5E4D] border-[#0B5E4D] hover:bg-emerald-50'}`}
+                                >
+                                    {isSyncing ? "불러오는 중..." : "🔄 최신 데이터 불러오기"}
+                                </button>
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
