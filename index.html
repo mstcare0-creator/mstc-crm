@@ -43,7 +43,6 @@
 
         const COMPANY_SEAL_URL = "https://mstcare0-creator.github.io/mstc-crm/seal.png"; 
 
-        // 💡 엑셀 붙여넣기 완벽 보정 엔진 (payStatus 값을 읽어 tab을 똑똑하게 자동 분류!)
         const normalizeData = (rawData) => {
             if (!Array.isArray(rawData)) return [];
             return rawData.map(item => {
@@ -59,7 +58,6 @@
                     try { parsedPayment = JSON.parse(item.paymentHistory); } catch(e) { parsedPayment = []; }
                 }
 
-                // 분류 지능: 명시된 tab이 없으면 payStatus(또는 status) 글자를 보고 자동 분류
                 let validTab = item.tab;
                 if (!validTab || validTab.trim() === "") {
                     const statusText = (item.payStatus || item.status || "").trim();
@@ -68,7 +66,7 @@
                     } else if (statusText === "일시정지" || statusText === "일시중지") {
                         validTab = "paused";
                     } else {
-                        validTab = "active"; // 그 외는 모두 운영중으로
+                        validTab = "active";
                     }
                 }
 
@@ -87,7 +85,7 @@
         function App() {
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [isSyncing, setIsSyncing] = useState(false); // 동기화(새로고침) 버튼 상태
+            const [isSyncing, setIsSyncing] = useState(false); 
 
             const [staffList, setStaffList] = useState(() => {
                 const saved = localStorage.getItem("mstc_staff_list_v1");
@@ -97,11 +95,9 @@
             const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
             const [newStaffInput, setNewStaffInput] = useState("");
 
-            // 처음 데이터 불러오기
             const loadData = (forceRefresh = false) => {
                 if (forceRefresh) setIsSyncing(true);
                 
-                // 강제 새로고침 시 로컬 캐시를 무시하기 위해 타임스탬프를 URL에 붙임
                 const fetchUrl = forceRefresh ? `${GOOGLE_SCRIPT_URL}?t=${Date.now()}` : GOOGLE_SCRIPT_URL;
 
                 fetch(fetchUrl)
@@ -133,7 +129,6 @@
                 loadData();
             }, []);
 
-            // 수동으로 구글 시트 데이터 다시 끌어오기 (캐시 삭제)
             const handleForceSync = () => {
                 loadData(true);
             };
@@ -378,7 +373,7 @@
                 const updatedItem = { ...selectedItem, paymentHistory: updatedPayList };
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item));
                 setSelectedItem(updatedItem); setShowPayForm(false); setEditingPayId(null);
-                setPayForm({ month: TODAY, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "" });
+                setPayForm({ month: CURRENT_MONTH, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "" });
             };
 
             const handleEditPayInit = (p) => {
@@ -438,7 +433,19 @@
             }, [enrichedData, currentTab, search, filterCity, filterDistrict, filterServiceType, filterCollection, filterCompletion]);
 
             const activeData = enrichedData.filter(d => d.tab === 'active');
-            const staffCountsText = staffList.map(staff => `${staff} ${activeData.filter(d => d.manager === staff).length}`).join(" · ");
+            
+            // 💡 담당자별 기준값(26년 5월) 설정 및 순증 계산 로직 완벽 적용!
+            const BASELINES = { "이원식": 62, "강현준": 55 };
+            const staffCountsText = staffList.map(staff => {
+                const currentCount = activeData.filter(d => d.manager === staff).length;
+                if (BASELINES[staff] !== undefined) {
+                    const diff = currentCount - BASELINES[staff];
+                    const diffStr = diff > 0 ? `+${diff}` : `${diff}`; // 양수면 +, 음수면 -, 0이면 0
+                    return `${staff} ${currentCount}(${diffStr})`;
+                }
+                return `${staff} ${currentCount}`;
+            }).join(" · ");
+
             const completedThisMonth = activeData.filter(c => c.history && c.history.some(h => h.type === '방역' && h.date && h.date.startsWith(CURRENT_MONTH))).length;
             const delayedThisMonth = activeData.length - completedThisMonth;
             const activeLikeCount = enrichedData.filter(d => d.tab === 'active' || d.tab === 'paused').length;
@@ -478,16 +485,12 @@
             const availablePaymentYears = selectedItem && selectedItem.paymentHistory ? [...new Set(selectedItem.paymentHistory.map(p => p.month ? p.month.split('-')[0] : ''))].filter(Boolean).sort().reverse() : [];
             const filteredPayment = selectedItem && selectedItem.paymentHistory ? [...selectedItem.paymentHistory]
                 .filter(p => paymentYearFilter === 'all' || (p.month && p.month.startsWith(paymentYearFilter)))
-                .sort((a, b) => {
-                    const dateA = a.month?.length === 7 ? `${a.month}-01` : a.month;
-                    const dateB = b.month?.length === 7 ? `${b.month}-01` : b.month;
-                    return new Date(dateB || 0) - new Date(dateA || 0);
-                }) : [];
+                .sort((a, b) => new Date((b.month || '') + '-01') - new Date((a.month || '') + '-01')) : [];
 
             return (
                 <div>
                     <div className={`max-w-7xl mx-auto space-y-6 ${isCertOpen ? 'hidden print:hidden' : 'block'}`}>
-                        {/* 💡 최상단 헤더 영역에 동기화 버튼 추가! */}
+                        {/* 최상단 헤더 영역에 동기화 버튼 */}
                         <div className="flex justify-between items-end mb-4 pt-2 px-2">
                             <div>
                                 <h1 className="text-2xl font-bold flex items-center gap-2 text-[#0B5E4D]">
@@ -511,7 +514,7 @@
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
                                 <div className="p-4 bg-[#E3F2EC] rounded-xl text-[#0B5E4D] text-2xl">👤</div>
-                                <div><p className="text-xs text-gray-400 font-bold mb-0.5">운영중 거래처</p><p className="text-2xl font-black text-gray-800 leading-none">{activeData.length}</p><p className="text-[11px] text-gray-500 mt-1.5 truncate max-w-[130px] sm:max-w-[150px]" title={staffCountsText}>{staffCountsText || "담당자 없음"}</p></div>
+                                <div><p className="text-xs text-gray-400 font-bold mb-0.5">운영중 거래처</p><p className="text-2xl font-black text-gray-800 leading-none">{activeData.length}</p><p className="text-[11px] text-emerald-700 font-bold mt-1.5 truncate max-w-[130px] sm:max-w-[150px]" title={staffCountsText}>{staffCountsText || "담당자 없음"}</p></div>
                             </div>
                             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
                                 <div className="p-4 bg-rose-50 rounded-xl text-rose-700 text-2xl">📅</div>
@@ -812,7 +815,7 @@
 
                                                 {!showPayForm && (
                                                     <button onClick={() => {
-                                                        setPayForm({ month: TODAY, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "" });
+                                                        setPayForm({ month: CURRENT_MONTH, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "" });
                                                         setEditingPayId(null);
                                                         setShowPayForm(true);
                                                     }} className="w-full bg-amber-50 text-amber-800 font-bold text-xs py-3 rounded-xl border border-amber-200 hover:bg-amber-100">+ 새로운 수금 기록 추가</button>
@@ -821,10 +824,10 @@
                                                 {showPayForm && (
                                                     <form ref={payFormRef} onSubmit={handleAddPayment} className={`border p-4 rounded-2xl shadow-sm space-y-4 text-xs ${editingPayId ? 'bg-indigo-50/30 border-indigo-200' : 'bg-amber-50/30 border-amber-100'}`}>
                                                         <p className={`font-bold border-b pb-2 ${editingPayId ? 'text-indigo-800 border-indigo-200' : 'text-amber-900 border-amber-200'}`}>
-                                                            {editingPayId ? "✏️ 수금 내역 수정 (미수금 상환)" : "💰 일별 수금 기록 추가"}
+                                                            {editingPayId ? "✏️ 수금 내역 수정 (미수금 상환)" : "💰 월별 수금 기록 추가"}
                                                         </p>
                                                         <div className="grid grid-cols-2 gap-3">
-                                                            <label className="block"><b>수금 일자</b><input type="date" value={payForm.month} onChange={e => setPayForm({...payForm, month: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" required /></label>
+                                                            <label className="block"><b>수금 월</b><input type="month" value={payForm.month} onChange={e => setPayForm({...payForm, month: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" required /></label>
                                                             
                                                             <label className="block"><b>수금 상태</b>
                                                                 <select 
