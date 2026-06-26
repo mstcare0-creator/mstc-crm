@@ -53,15 +53,15 @@
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
                             setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v44", JSON.stringify(fetchedData));
+                            localStorage.setItem("mstc_crm_data_v45", JSON.stringify(fetchedData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v44");
+                            const local = localStorage.getItem("mstc_crm_data_v45");
                             if(local) setData(JSON.parse(local));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v44");
+                        const local = localStorage.getItem("mstc_crm_data_v45");
                         if(local) setData(JSON.parse(local));
                         setLoading(false);
                     });
@@ -69,7 +69,7 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v44", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v45", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
@@ -293,11 +293,9 @@
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item)); setSelectedItem(updatedItem);
             };
 
+            // 💡 [치명적 에러 완벽 해결] 변수 선언 누락 문제 해결 및 안정적인 계산 로직
             const enrichedData = useMemo(() => {
-                let debtSum = 0;
-                let debtCount = 0;
-                
-                const mapped = data.map(item => {
+                return data.map(item => {
                     let safeTab = item.tab;
                     if (!safeTab || safeTab.trim() === "") {
                         if (item.payStatus === '일시중지') safeTab = 'paused';
@@ -316,16 +314,13 @@
                             }
                         });
                     }
-                    if (itemDebt > 0) {
-                        debtSum += itemDebt;
-                        debtCount += 1;
-                    }
                     return { ...item, tab: safeTab, computedDebt: itemDebt };
                 });
-                totalUncollected = debtSum;
-                uncollectedClientsCount = debtCount;
-                return mapped;
             }, [data]);
+
+            // [안정화] useMemo 바깥에서 총계 계산 처리하여 ReferenceError 완벽 차단!
+            const totalUncollected = enrichedData.reduce((sum, item) => sum + (item.computedDebt || 0), 0);
+            const uncollectedClientsCount = enrichedData.filter(item => (item.computedDebt || 0) > 0).length;
 
             const selectedItemDebt = selectedItem ? enrichedData.find(d => d.id === selectedItem.id)?.computedDebt || 0 : 0;
             const selectedItemTotalPaid = useMemo(() => {
@@ -473,7 +468,6 @@
                                         <select value={filterCity} onChange={e => { setFilterCity(e.target.value); setFilterDistrict(""); }} className="text-xs p-2.5 rounded-xl border bg-white outline-none"><option value="">시/도 전체</option>{Object.keys(REGIONS).map(c => <option key={c}>{c}</option>)}</select>
                                         <select value={filterDistrict} onChange={e => setFilterDistrict(e.target.value)} disabled={!filterCity} className="text-xs p-2.5 rounded-xl border bg-white outline-none disabled:bg-gray-100 disabled:text-gray-400"><option value="">구/군 전체</option>{filterCity && REGIONS[filterCity].map(d => <option key={d}>{d}</option>)}</select>
                                         
-                                        {/* 💡 [결제 상태 전체] 불필요한 일시중지, 해지 삭제! 유료/무료만 남김 */}
                                         <select value={filterPayStatus} onChange={e => setFilterPayStatus(e.target.value)} className="text-xs p-2.5 rounded-xl border bg-white outline-none font-bold text-gray-700">
                                             <option value="">결제 상태 전체</option>
                                             <option value="유료">💰 유료 업체</option>
@@ -540,7 +534,7 @@
                                 </div>
                             </div>
 
-                            {/* 우측 상세창 (알맹이 복구 완료) */}
+                            {/* 우측 상세창 */}
                             {selectedItem && (
                                 <div className="w-full lg:w-[440px] bg-white h-fit shadow-2xl rounded-3xl border flex flex-col z-20 animate-slide-in overflow-hidden">
                                     
@@ -575,7 +569,6 @@
                                         <button onClick={() => { setDetailTab("history"); setIsEditing(false); setShowHistoryForm(false); setShowPayForm(false); setEditingPayId(null); }} className={`flex-1 py-3 transition-all ${detailTab === 'history' ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-400 hover:bg-gray-50'}`}>📝 방역 기록</button>
                                     </div>
 
-                                    {/* 💡 상세창 내부 내용(정보/수금/방역) 100% 복원 완료 */}
                                     <div className="p-5 overflow-y-auto max-h-[70vh] bg-white">
                                         
                                         {/* 1. 정보 탭 */}
@@ -644,7 +637,7 @@
                                                                 <span className="font-sans text-gray-500 text-[11px] ml-3 font-normal">대표: <span className="font-bold">{selectedItem.clientRepName || "미기입"}</span></span>
                                                             </p>
                                                         </div>
-                                                        
+
                                                         <div className="col-span-2 p-3 bg-white rounded-xl border border-gray-200 mb-1 mt-1 shadow-sm">
                                                             <p className="text-gray-700 font-bold mb-2">🏃‍♂️ 현장 출동 정보 요약</p>
                                                             <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
@@ -822,7 +815,7 @@
                                                                 })}
                                                             </div>
                                                             <div className="flex gap-1.5 bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
-                                                                <input type="text" value={customMethodInput} onChange={e => setCustomMethodInput(e.target.value)} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomMethod(); }}} placeholder="기타 처리 종류 직접 입력" className="flex-1 p-2 border-none rounded-lg text-xs outline-none" />
+                                                                <input type="text" value={customMethodInput} onChange={e => setCustomMethodInput(e.target.value)} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomMethod(); }}} placeholder="기타 처리 종류 직접 입력 (예: 구서, 포충기)" className="flex-1 p-2 border-none rounded-lg text-xs outline-none" />
                                                                 <button type="button" onClick={handleAddCustomMethod} className="px-3 py-1.5 bg-gray-600 text-white rounded-lg text-xs font-bold shadow-sm hover:opacity-90">종류 추가</button>
                                                             </div>
                                                         </div>
@@ -846,7 +839,7 @@
                                                                     })}
                                                                 </div>
                                                                 <div className="flex gap-1.5">
-                                                                    <input type="text" value={customChemInput["살균"] || ""} onChange={e => setCustomChemInput({...customChemInput, "살균": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("살균"); }}} placeholder="기타 살균 약품 직접 입력" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm bg-gray-50" />
+                                                                    <input type="text" value={customChemInput["살균"] || ""} onChange={e => setCustomChemInput({...customChemInput, "살균": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("살균"); }}} placeholder="기타 살균 약품 직접 입력 후 추가 버튼 클릭" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm bg-gray-50" />
                                                                     <button type="button" onClick={() => handleAddCustomChem("살균")} className="px-3 py-1.5 bg-emerald-700 text-white rounded-lg text-[11px] font-bold shadow-sm hover:opacity-90">추가</button>
                                                                 </div>
                                                             </div>
@@ -870,7 +863,7 @@
                                                                     })}
                                                                 </div>
                                                                 <div className="flex gap-1.5">
-                                                                    <input type="text" value={customChemInput["살충"] || ""} onChange={e => setCustomChemInput({...customChemInput, "살충": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("살충"); }}} placeholder="기타 살충 약품 직접 입력" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm bg-gray-50" />
+                                                                    <input type="text" value={customChemInput["살충"] || ""} onChange={e => setCustomChemInput({...customChemInput, "살충": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("살충"); }}} placeholder="기타 살충 약품 직접 입력 후 추가 버튼 클릭" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm bg-gray-50" />
                                                                     <button type="button" onClick={() => handleAddCustomChem("살충")} className="px-3 py-1.5 bg-amber-700 text-white rounded-lg text-[11px] font-bold shadow-sm hover:opacity-90">추가</button>
                                                                 </div>
                                                             </div>
@@ -891,7 +884,7 @@
                                                                     })}
                                                                 </div>
                                                                 <div className="flex gap-1.5">
-                                                                    <input type="text" value={customChemInput["기타"] || ""} onChange={e => setCustomChemInput({...customChemInput, "기타": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("기타"); }}} placeholder="기타 사용 약품/장비 입력" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm bg-gray-50" />
+                                                                    <input type="text" value={customChemInput["기타"] || ""} onChange={e => setCustomChemInput({...customChemInput, "기타": e.target.value})} onKeyDown={e => {if(e.key === 'Enter') { e.preventDefault(); handleAddCustomChem("기타"); }}} placeholder="기타 방식에 사용된 약품/장비 등 입력" className="flex-1 p-2 border rounded-lg text-[11px] outline-none shadow-sm bg-gray-50" />
                                                                     <button type="button" onClick={() => handleAddCustomChem("기타")} className="px-3 py-1.5 bg-blue-700 text-white rounded-lg text-[11px] font-bold shadow-sm hover:opacity-90">추가</button>
                                                                 </div>
                                                             </div>
@@ -986,9 +979,7 @@
                                     <label><b>방역 주기 *</b><select name="cycle" className="w-full p-2 border rounded-lg mt-1">{CYCLES.map(c=><option key={c}>{c}</option>)}</select></label>
                                     <label><b>방역 구분 *</b><select name="serviceType" className="w-full p-2 border rounded-lg mt-1"><option>정기</option><option>분기</option><option>무료</option></select></label>
                                     <label><b>결제 방식 *</b><select name="payMethod" className="w-full p-2 border rounded-lg mt-1"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>기타</option></select></label>
-                                    
                                     <label><b>결제 상태 *</b><select name="payStatus" className="w-full p-2 border rounded-lg mt-1"><option>유료</option><option>무료</option><option>일시중지</option><option>해지</option></select></label>
-                                    
                                     <label className="col-span-2"><b>제공 서비스</b><input name="providedService" className="w-full p-2 border rounded-lg mt-1" placeholder="예: 포충기 대여, 방향제 등" /></label>
                                     <label className="col-span-2 mt-2"><b>기타 (추가 정보)</b><textarea name="etcInfo" className="w-full p-2 border rounded-lg mt-1 h-16" placeholder="특이사항 등 자유롭게 입력"></textarea></label>
                                 </div>
