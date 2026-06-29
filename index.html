@@ -53,15 +53,15 @@
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
                             setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v45", JSON.stringify(fetchedData));
+                            localStorage.setItem("mstc_crm_data_v46", JSON.stringify(fetchedData));
                         } else {
-                            const local = localStorage.getItem("mstc_crm_data_v45");
+                            const local = localStorage.getItem("mstc_crm_data_v46");
                             if(local) setData(JSON.parse(local));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
-                        const local = localStorage.getItem("mstc_crm_data_v45");
+                        const local = localStorage.getItem("mstc_crm_data_v46");
                         if(local) setData(JSON.parse(local));
                         setLoading(false);
                     });
@@ -69,12 +69,92 @@
 
             const updateDataAndSync = (newData) => {
                 setData(newData);
-                localStorage.setItem("mstc_crm_data_v45", JSON.stringify(newData)); 
+                localStorage.setItem("mstc_crm_data_v46", JSON.stringify(newData)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ data: newData })
                 }).catch(err => console.log("전송 지연"));
+            };
+
+            // 💡 [핵심 추가] 관리자 비밀번호 로직 적용
+            const handleBatchInsert = () => {
+                const pwd = prompt("🔒 관리자 전용 기능입니다. 비밀번호를 입력하세요.");
+                if (pwd !== "0176") {
+                    if (pwd !== null) alert("🚨 비밀번호가 틀렸습니다.");
+                    return;
+                }
+
+                if(!confirm("⚠️ 현재 '운영중'인 거래처 전체에 대하여, [방역시작일] 기준으로 현재 달까지의 빈 기록을 시스템이 자동으로 꽉 채웁니다.\n진행하시겠습니까?")) return;
+
+                const currentYM = CURRENT_MONTH; // 현재 달 기준
+                let count = 0;
+
+                const newData = data.map(item => {
+                    let safeTab = item.tab;
+                    if (!safeTab || safeTab.trim() === "") {
+                        if (item.payStatus === '일시중지') safeTab = 'paused';
+                        else if (item.payStatus === '해지') safeTab = 'terminated';
+                        else safeTab = 'active'; 
+                    }
+
+                    if(safeTab !== "active") return { ...item, tab: safeTab };
+                    if(!item.contractStart) return { ...item, tab: safeTab };
+
+                    let startYM = item.contractStart.slice(0, 7);
+                    let startDay = item.contractStart.slice(8, 10);
+                    let safeDay = String(Math.min(parseInt(startDay, 10), 28)).padStart(2, '0');
+
+                    let targetMonths = [];
+                    let [sYear, sMonth] = startYM.split('-').map(Number);
+                    let [cYear, cMonth] = currentYM.split('-').map(Number);
+                    
+                    let tempY = sYear;
+                    let tempM = sMonth;
+                    
+                    while (tempY < cYear || (tempY === cYear && tempM <= cMonth)) {
+                        targetMonths.push(`${tempY}-${String(tempM).padStart(2, '0')}`);
+                        tempM++;
+                        if (tempM > 12) { tempM = 1; tempY++; }
+                    }
+
+                    let h = [...(item.history || [])];
+                    let p = [...(item.paymentHistory || [])];
+                    
+                    const defaultPayStatus = item.payStatus === "무료" ? "무료" : "수금완료";
+                    const defaultPayAmount = item.payStatus === "무료" ? "0" : (item.fee || "30000");
+
+                    targetMonths.forEach(m => {
+                        if(!h.find(x => x.date && x.date.startsWith(m))) {
+                            h.push({
+                                id: Date.now() + Math.random(), 
+                                date: `${m}-${safeDay}`, 
+                                time: "10:00", 
+                                type: "방역", 
+                                author: item.manager || "이원식", 
+                                content: "정기 방역 완료", 
+                                methods: ["살충"], 
+                                chemicals: ["롱다운플러스"]
+                            });
+                            count++;
+                        }
+                        if(!p.find(x => x.month === m)) {
+                            p.push({
+                                id: Date.now() + Math.random(), 
+                                month: m, 
+                                amount: defaultPayAmount, 
+                                status: defaultPayStatus, 
+                                method: item.payMethod || "계좌이체", 
+                                note: "시스템 일괄 셋팅"
+                            });
+                            count++;
+                        }
+                    });
+                    return {...item, history: h, paymentHistory: p, tab: safeTab};
+                });
+
+                updateDataAndSync(newData);
+                alert(`🎉 일괄 기입 완료! 빈 공간에 총 ${count}개의 알맞은 기록이 자동 생성되었습니다.`);
             };
 
             const [currentTab, setCurrentTab] = useState("active");
@@ -293,9 +373,11 @@
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item)); setSelectedItem(updatedItem);
             };
 
-            // 💡 [치명적 에러 완벽 해결] 변수 선언 누락 문제 해결 및 안정적인 계산 로직
             const enrichedData = useMemo(() => {
-                return data.map(item => {
+                let debtSum = 0;
+                let debtCount = 0;
+                
+                const mapped = data.map(item => {
                     let safeTab = item.tab;
                     if (!safeTab || safeTab.trim() === "") {
                         if (item.payStatus === '일시중지') safeTab = 'paused';
@@ -314,13 +396,16 @@
                             }
                         });
                     }
+                    if (itemDebt > 0) {
+                        debtSum += itemDebt;
+                        debtCount += 1;
+                    }
                     return { ...item, tab: safeTab, computedDebt: itemDebt };
                 });
+                totalUncollected = debtSum;
+                uncollectedClientsCount = debtCount;
+                return mapped;
             }, [data]);
-
-            // [안정화] useMemo 바깥에서 총계 계산 처리하여 ReferenceError 완벽 차단!
-            const totalUncollected = enrichedData.reduce((sum, item) => sum + (item.computedDebt || 0), 0);
-            const uncollectedClientsCount = enrichedData.filter(item => (item.computedDebt || 0) > 0).length;
 
             const selectedItemDebt = selectedItem ? enrichedData.find(d => d.id === selectedItem.id)?.computedDebt || 0 : 0;
             const selectedItemTotalPaid = useMemo(() => {
@@ -406,7 +491,10 @@
                             </div>
                             <div className="flex flex-col items-end gap-2">
                                 <div className="text-sm text-gray-400 font-mono font-bold tracking-wider">{TODAY.replace(/-/g, '.')} 기준</div>
-                                <button onClick={() => window.location.reload()} className="px-3 py-1.5 border border-[#0B5E4D] text-[#0B5E4D] rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-sm hover:bg-[#0B5E4D] hover:text-white transition-all">🔄 최신 데이터 불러오기</button>
+                                <div className="flex gap-2">
+                                    <button onClick={handleBatchInsert} className="px-3 py-1.5 border border-blue-600 text-blue-700 bg-blue-50 rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-sm hover:bg-blue-600 hover:text-white transition-all">🪄 과거기록 일괄 자동채우기</button>
+                                    <button onClick={() => window.location.reload()} className="px-3 py-1.5 border border-[#0B5E4D] text-[#0B5E4D] rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-sm hover:bg-[#0B5E4D] hover:text-white transition-all">🔄 최신 데이터 불러오기</button>
+                                </div>
                             </div>
                         </div>
 
@@ -994,7 +1082,7 @@
                         </div>
                     )}
 
-                    {/* 소독증명서 출력 모달 */}
+                    {/* 소독증명서 출력 (관리자 화면용) */}
                     {isCertOpen && selectedItem && certEntry && (
                         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:bg-white print:p-0">
                             <div className="bg-white rounded-3xl p-8 max-w-3xl w-full max-h-[96vh] overflow-y-auto my-auto shadow-2xl print:shadow-none print:w-full print:h-auto print:max-h-none print:overflow-visible">
