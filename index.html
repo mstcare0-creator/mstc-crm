@@ -458,12 +458,20 @@
             const activeData = enrichedData.filter(d => d.tab === 'active');
             const leeCount = activeData.filter(d => d.manager === '이원식').length;
             const kangCount = activeData.filter(d => d.manager === '강현준').length;
-            const completedThisMonth = activeData.filter(c => c.history && c.history.some(h => h.type === '방역' && h.date && h.date.startsWith(CURRENT_MONTH))).length;
-            const delayedThisMonth = activeData.length - completedThisMonth;
+            // 지연: 월1회 주기 업체만 이번 달 방역 미실시 카운트
+            const monthlyActiveData = activeData.filter(d => (d.cycle || '월1회') === '월1회');
+            const completedThisMonth = monthlyActiveData.filter(c => c.history && c.history.some(h => h.type === '방역' && h.date && h.date.startsWith(CURRENT_MONTH))).length;
+            const delayedThisMonth = monthlyActiveData.length - completedThisMonth;
             const activeLikeCount = enrichedData.filter(d => d.tab === 'active' || d.tab === 'paused').length;
             const termCount = enrichedData.filter(d => d.tab === 'terminated').length;
             const totalEver = activeLikeCount + termCount;
             const cancelRate = totalEver === 0 ? "0.0" : ((termCount / totalEver) * 100).toFixed(1);
+
+            // 순증 차트 기준값 (2026-05 기준 유료 업체)
+            const BASE_MONTH = "2026-05";
+            const BASE_LEE = 62;
+            const BASE_KANG = 55;
+            const BASE_TOTAL = BASE_LEE + BASE_KANG;
 
             const chartStats = useMemo(() => {
                 const cy = parseInt(CURRENT_MONTH.split('-')[0], 10); const cm = parseInt(CURRENT_MONTH.split('-')[1], 10);
@@ -472,20 +480,40 @@
                     if (m <= 0) { m += 12; y -= 1; }
                     return `${y}-${String(m).padStart(2, '0')}`;
                 });
-                const chartDataToUse = chartManager === "전체 담당자" ? data : data.filter(d => d.manager === chartManager);
-                return months.map(monthStr => {
+                // 유료 업체만 (무료 제외)
+                const paidOnly = data.filter(d => (d.payStatus || '유료') !== '무료');
+                const chartDataToUse = chartManager === "전체 담당자" ? paidOnly
+                    : paidOnly.filter(d => d.manager === chartManager);
+                const baseVal = chartManager === "이원식" ? BASE_LEE
+                    : chartManager === "강현준" ? BASE_KANG
+                    : BASE_TOTAL;
+
+                return months.map((monthStr) => {
                     const mLabel = parseInt(monthStr.split('-')[1], 10) + '월';
-                    const newCount = chartDataToUse.filter(d => d.contractStart && d.contractStart.startsWith(monthStr)).length;
+                    // 2026-05 이전: 모두 0
+                    if (monthStr < BASE_MONTH) {
+                        return { month: monthStr, label: mLabel, newCount: 0, termCount: 0, netCount: 0, cumulative: null };
+                    }
+                    // 2026-05: 기준값만 표시
+                    if (monthStr === BASE_MONTH) {
+                        return { month: monthStr, label: mLabel, newCount: 0, termCount: 0, netCount: 0, cumulative: baseVal };
+                    }
+                    // 2026-06 이후: 실제 신규/해지 변동
+                    const newCount = chartDataToUse.filter(d => {
+                        if (!d.contractStart) return false;
+                        const cs = String(d.contractStart).replace(/[\.\/]/g, '-');
+                        return cs.startsWith(monthStr);
+                    }).length;
                     const termCountData = chartDataToUse.filter(d => {
                         if (d.tab !== 'terminated') return false;
                         if (d.history && d.history.length > 0 && d.history[0].date) return d.history[0].date.startsWith(monthStr);
-                        return d.contractStart && d.contractStart.startsWith(monthStr);
+                        return d.contractStart && String(d.contractStart).startsWith(monthStr);
                     }).length;
-                    return { month: monthStr, label: mLabel, newCount, termCount: termCountData, netCount: newCount - termCountData };
+                    return { month: monthStr, label: mLabel, newCount, termCount: termCountData, netCount: newCount - termCountData, cumulative: null };
                 });
             }, [data, chartManager]);
 
-            const maxChartVal = Math.max(1, ...chartStats.map(s => Math.max(s.newCount, s.termCount, Math.abs(s.netCount))));
+            const maxChartVal = Math.max(1, ...chartStats.map(s => Math.max(s.newCount, s.termCount, Math.abs(s.netCount), s.cumulative || 0)));
 
             if (loading) return <div className="flex items-center justify-center min-h-screen font-bold text-emerald-800">데이터 로드 중... 잠시만 기다려주세요!</div>;
 
@@ -552,9 +580,20 @@
                                 {chartStats.map(chart => (
                                     <div key={chart.month} className="flex flex-col items-center gap-2 relative z-10 w-16 group">
                                         <div className="flex items-end gap-1 h-28 w-full justify-center relative">
-                                            <div className="bg-[#0B5E4D] rounded-t-sm shadow-sm transition-all duration-500 w-3.5" style={{ height: `${(chart.newCount / maxChartVal) * 100}%`, minHeight: chart.newCount > 0 ? '4px' : '0' }}></div>
-                                            <div className="bg-rose-700 rounded-t-sm shadow-sm transition-all duration-500 w-3.5" style={{ height: `${(chart.termCount / maxChartVal) * 100}%`, minHeight: chart.termCount > 0 ? '4px' : '0' }}></div>
-                                            <div className="absolute -top-10 bg-gray-800 text-white text-[11px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20 shadow-lg font-bold">순증 {chart.netCount > 0 ? `+${chart.netCount}` : chart.netCount}건</div>
+                                            {chart.cumulative !== null ? (
+                                                // 5월: 기준값 표시 (회색 누적 바)
+                                                <div className="flex flex-col items-center justify-end h-full w-full">
+                                                    <div className="bg-gray-300 rounded-t-sm w-7 flex items-end justify-center" style={{ height: `${(chart.cumulative / maxChartVal) * 100}%`, minHeight: '4px' }}>
+                                                    </div>
+                                                    <div className="absolute -top-10 bg-gray-800 text-white text-[11px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20 shadow-lg font-bold">기준 {chart.cumulative}건</div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="bg-[#0B5E4D] rounded-t-sm shadow-sm transition-all duration-500 w-3.5" style={{ height: `${(chart.newCount / maxChartVal) * 100}%`, minHeight: chart.newCount > 0 ? '4px' : '0' }}></div>
+                                                    <div className="bg-rose-700 rounded-t-sm shadow-sm transition-all duration-500 w-3.5" style={{ height: `${(chart.termCount / maxChartVal) * 100}%`, minHeight: chart.termCount > 0 ? '4px' : '0' }}></div>
+                                                    <div className="absolute -top-10 bg-gray-800 text-white text-[11px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20 shadow-lg font-bold">{chart.newCount === 0 && chart.termCount === 0 ? '변동 없음' : `순증 ${chart.netCount > 0 ? '+' + chart.netCount : chart.netCount}건`}</div>
+                                                </>
+                                            )}
                                         </div>
                                         <span className="text-[10px] text-gray-400 font-bold">{chart.label}</span>
                                     </div>
