@@ -181,7 +181,8 @@
             const [filterDistrict, setFilterDistrict] = useState("");
             const [filterPayStatus, setFilterPayStatus] = useState(""); 
             const [filterCollection, setFilterCollection] = useState("");
-            const [filterCompletion, setFilterCompletion] = useState(""); 
+            const [filterCompletion, setFilterCompletion] = useState("");
+            const [filterServiceType, setFilterServiceType] = useState(""); 
             const [chartManager, setChartManager] = useState("전체 담당자");
             
             const [selectedItem, setSelectedItem] = useState(null);
@@ -451,9 +452,11 @@
                     const matchCollection = !filterCollection || (filterCollection === '미수금' ? r.computedDebt > 0 : r.computedDebt === 0);
                     const isCompletedThisMonth = r.history && r.history.some(h => h.type === '방역' && h.date && h.date.startsWith(CURRENT_MONTH));
                     const matchCompletion = !filterCompletion || (filterCompletion === 'completed' ? isCompletedThisMonth : !isCompletedThisMonth);
-                    return matchSearch && matchCity && matchDistrict && matchPayStatus && matchCollection && matchCompletion;
+                    const effectiveServiceType = (r.serviceType || '정기').trim();
+                    const matchServiceType = !filterServiceType || effectiveServiceType === filterServiceType;
+                    return matchSearch && matchCity && matchDistrict && matchPayStatus && matchCollection && matchCompletion && matchServiceType;
                 });
-            }, [enrichedData, currentTab, search, filterCity, filterDistrict, filterPayStatus, filterCollection, filterCompletion]);
+            }, [enrichedData, currentTab, search, filterCity, filterDistrict, filterPayStatus, filterCollection, filterCompletion, filterServiceType]);
 
             const activeData = enrichedData.filter(d => d.tab === 'active');
             const leeCount = activeData.filter(d => d.manager === '이원식').length;
@@ -506,8 +509,12 @@
                     }).length;
                     const termCountData = chartDataToUse.filter(d => {
                         if (d.tab !== 'terminated') return false;
-                        if (d.history && d.history.length > 0 && d.history[0].date) return d.history[0].date.startsWith(monthStr);
-                        return d.contractStart && String(d.contractStart).startsWith(monthStr);
+                        // 해지일: history 중 가장 최신 날짜 기록 사용
+                        if (d.history && d.history.length > 0) {
+                            const sorted = [...d.history].sort((a, b) => (b.date || '') > (a.date || '') ? 1 : -1);
+                            if (sorted[0].date) return sorted[0].date.startsWith(monthStr);
+                        }
+                        return d.contractStart && String(d.contractStart).replace(/[\.\/]/g, '-').startsWith(monthStr);
                     }).length;
                     return { month: monthStr, label: mLabel, newCount, termCount: termCountData, netCount: newCount - termCountData, cumulative: null };
                 });
@@ -622,6 +629,12 @@
                                             <option value="무료">🎁 무료/서비스 업체</option>
                                         </select>
                                         
+                                        <select value={filterServiceType} onChange={e => setFilterServiceType(e.target.value)} className="text-xs p-2.5 rounded-xl border bg-white outline-none font-bold text-gray-700">
+                                            <option value="">방역구분 전체</option>
+                                            <option value="정기">📋 정기방역</option>
+                                            <option value="분기">📅 분기방역</option>
+                                            <option value="무료">🎁 무료방역</option>
+                                        </select>
                                         <select value={filterCompletion} onChange={e => setFilterCompletion(e.target.value)} className="text-xs p-2.5 rounded-xl border bg-white outline-none font-bold text-[#0B5E4D]">
                                             <option value="">방역 상태 전체</option><option value="completed">✅ {CURRENT_MONTH_NUM}월 방역 완료</option><option value="pending">🚨 {CURRENT_MONTH_NUM}월 미실시</option>
                                         </select>
