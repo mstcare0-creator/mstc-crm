@@ -391,7 +391,7 @@
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item)); setSelectedItem(updatedItem);
             };
 
-            const enrichedData = useMemo(() => {
+            const { enrichedData, totalUncollected, uncollectedClientsCount } = useMemo(() => {
                 let debtSum = 0;
                 let debtCount = 0;
                 
@@ -420,9 +420,11 @@
                     }
                     return { ...item, tab: safeTab, computedDebt: itemDebt };
                 });
-                totalUncollected = debtSum;
-                uncollectedClientsCount = debtCount;
-                return mapped;
+                return {
+                    enrichedData: mapped,
+                    totalUncollected: debtSum,
+                    uncollectedClientsCount: debtCount
+                };
             }, [data]);
 
             const selectedItemDebt = selectedItem ? enrichedData.find(d => d.id === selectedItem.id)?.computedDebt || 0 : 0;
