@@ -198,6 +198,7 @@
             const [editForm, setEditForm] = useState({});
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [regCity, setRegCity] = useState("부산");
+            const [regKind, setRegKind] = useState("active");
 
             const [regError, setRegError] = useState("");
             const [editError, setEditError] = useState("");
@@ -291,13 +292,13 @@
 
                 const safeData = {
                     id: "AC" + Date.now(), tab: regTab,
-                    name: name, manager: fd.get("manager"), phone: phone,
+                    name: name, manager: fd.get("manager") || "", phone: phone,
                     bizNumber: fd.get("bizNumber") || "", 
                     clientRepName: fd.get("clientRepName") || "", 
                     
-                    gu: fd.get("gu"), dong: fd.get("dong"), address: address, area: fd.get("area"),
-                    contractStart: fd.get("contractStart") || TODAY, serviceType: fd.get("serviceType") || "정기", payStatus: payStat,
-                    cycle: fd.get("cycle"), fee: fd.get("fee") || "30000", 
+                    gu: fd.get("gu"), dong: fd.get("dong"), address: address, area: fd.get("area") || "",
+                    contractStart: fd.get("contractStart") || TODAY, serviceType: fd.get("serviceType") || "정기", payStatus: payStat || "유료",
+                    cycle: fd.get("cycle") || "", fee: fd.get("fee") || "30000", 
                     payMethod: fd.get("payMethod") || "계좌이체",
                     providedService: fd.get("providedService") || "",
                     
@@ -309,7 +310,7 @@
 
                     etcInfo: fd.get("etcInfo") || "",
                     collectionStatus: fd.get("collectionStatus") || "수금완료", uncollectedAmount: fd.get("uncollectedAmount") || "0",
-                    history: [{id: Date.now(), date: TODAY, time: "", type: "상담", content: "신규 등록 완료", author: fd.get("manager")}], paymentHistory: []
+                    history: [{id: Date.now(), date: TODAY, time: "", type: "상담", content: "신규 등록 완료", author: fd.get("manager") || "-"}], paymentHistory: []
                 };
                 updateDataAndSync([safeData, ...data]); 
                 setIsModalOpen(false); setCurrentTab(regTab);
@@ -596,7 +597,7 @@
                                             </select>
                                             <button onClick={() => alert("대원 관리 시스템 준비중")} className="px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-700 flex items-center gap-1 shadow-sm hover:bg-gray-50">⚙️ 대원 관리</button>
                                         </div>
-                                        <button onClick={() => { setIsModalOpen(true); setRegError(""); }} className="bg-[#0B5E4D] text-white font-bold text-xs px-5 py-2.5 rounded-xl hover:opacity-95 shadow-sm whitespace-nowrap">+ 신규 등록</button>
+                                        <button onClick={() => { setIsModalOpen(true); setRegError(""); setRegKind(currentTab === "prospect" ? "prospect" : "active"); }} className="bg-[#0B5E4D] text-white font-bold text-xs px-5 py-2.5 rounded-xl hover:opacity-95 shadow-sm whitespace-nowrap">+ 신규 등록</button>
                                     </div>
                                 </div>
 
@@ -1077,19 +1078,22 @@
                                 <h3 className="text-lg font-bold mb-4 border-b pb-2">신규 업체 등록</h3>
                                 <div className="grid grid-cols-2 gap-3 text-xs">
                                     <label className="col-span-2"><b>등록 탭 구분 *</b>
-                                        <select name="tab" defaultValue={currentTab === "prospect" ? "prospect" : "active"} className="w-full p-2 border rounded-lg mt-1 bg-gray-50"><option value="active">방역 거래처 (운영)</option><option value="prospect">영업처 (대기)</option></select>
+                                        <select name="tab" value={regKind} onChange={e=>setRegKind(e.target.value)} className="w-full p-2 border rounded-lg mt-1 bg-gray-50"><option value="active">방역거래처</option><option value="prospect">신규 영업처</option></select>
                                     </label>
                                     <label className="col-span-2"><b>상호명 *</b><input name="name" className="w-full p-2 border rounded-lg mt-1" placeholder="필수 입력" /></label>
+                                    {regKind === "active" && (<>
                                     <label className="col-span-1"><b>대표자명 (선택)</b><input name="clientRepName" className="w-full p-2 border rounded-lg mt-1" placeholder="업체 대표 이름" /></label>
                                     <label className="col-span-1"><b>사업자번호 (선택)</b><input name="bizNumber" className="w-full p-2 border rounded-lg mt-1" placeholder="숫자만 입력" /></label>
                                     <label className="col-span-1"><b>담당 대원 *</b><select name="manager" className="w-full p-2 border rounded-lg mt-1">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
-                                    <label className="col-span-1"><b>연락처 *</b><input name="phone" className="w-full p-2 border rounded-lg mt-1" placeholder="필수 입력" /></label>
+                                    </>)}
+                                    <label className={regKind === "active" ? "col-span-1" : "col-span-2"}><b>연락처 *</b><input name="phone" className="w-full p-2 border rounded-lg mt-1" placeholder="필수 입력" /></label>
                                     <label className="col-span-2 flex gap-2">
                                         <div className="flex-1"><b>시/도 *</b><select name="gu" value={regCity} onChange={e=>setRegCity(e.target.value)} className="border p-2 w-full rounded-lg mt-1 bg-white">{Object.keys(REGIONS).map(r=><option key={r} value={r}>{r}</option>)}</select></div>
                                         <div className="flex-1"><b>구/군 *</b><select name="dong" className="border p-2 w-full rounded-lg mt-1 bg-white">{REGIONS[regCity].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
                                     </label>
                                     <label className="col-span-2"><b>상세주소 *</b><input name="address" className="w-full p-2 border rounded-lg mt-1" placeholder="필수 입력" /></label>
                                     
+                                    {regKind === "active" && (<>
                                     <label className="col-span-2 text-blue-800 font-bold border-t pt-2 mt-2">🏃‍♂️ 현장 출동 체크리스트</label>
                                     <label className="col-span-1"><b>주차 가능 여부</b><select name="parking" defaultValue="O" className="w-full p-2 border rounded-lg mt-1"><option value="O">O (가능)</option><option value="X">X (불가/어려움)</option><option value="△">△ (협소/확인필요)</option></select></label>
                                     <label className="col-span-1"><b>작업 사진 필수</b><select name="photoReq" defaultValue="X" className="w-full p-2 border rounded-lg mt-1"><option value="O">O (필요함)</option><option value="X">X (불필요)</option></select></label>
@@ -1111,6 +1115,7 @@
                                     
                                     <label className="col-span-2"><b>제공 서비스</b><input name="providedService" className="w-full p-2 border rounded-lg mt-1" placeholder="예: 포충기 대여, 쥐트랩 등" /></label>
                                     <label className="col-span-2 mt-2"><b>기타 (추가 정보)</b><textarea name="etcInfo" className="w-full p-2 border rounded-lg mt-1 h-16" placeholder="특이사항 등 자유롭게 입력"></textarea></label>
+                                    </>)}
                                 </div>
                                 <div className="flex justify-between items-center mt-6 border-t pt-4">
                                     <span className="text-red-500 font-bold text-xs">{regError}</span>
