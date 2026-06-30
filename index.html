@@ -7,6 +7,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.20/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
@@ -290,11 +291,14 @@
                 if (payStat === "일시중지") regTab = "paused";
                 else if (payStat === "해지") regTab = "terminated";
 
+                const salesDate = fd.get("salesDate") || TODAY;
+
                 const safeData = {
                     id: "AC" + Date.now(), tab: regTab,
                     name: name, manager: fd.get("manager") || "", phone: phone,
                     bizNumber: fd.get("bizNumber") || "", 
                     clientRepName: fd.get("clientRepName") || "", 
+                    salesDate: regTab === "prospect" ? salesDate : "",
                     
                     gu: fd.get("gu"), dong: fd.get("dong"), address: address, area: fd.get("area") || "",
                     contractStart: fd.get("contractStart") || TODAY, serviceType: fd.get("serviceType") || "정기", payStatus: payStat || "유료",
@@ -310,7 +314,10 @@
 
                     etcInfo: fd.get("etcInfo") || "",
                     collectionStatus: fd.get("collectionStatus") || "수금완료", uncollectedAmount: fd.get("uncollectedAmount") || "0",
-                    history: [{id: Date.now(), date: TODAY, time: "", type: "상담", content: "신규 등록 완료", author: fd.get("manager") || "-"}], paymentHistory: []
+                    history: regTab === "prospect" 
+                        ? [{id: Date.now(), date: salesDate, time: "", type: "상담", content: "신규 영업 활동", author: fd.get("manager") || "-"}]
+                        : [{id: Date.now(), date: TODAY, time: "", type: "상담", content: "신규 등록 완료", author: fd.get("manager") || "-"}],
+                    paymentHistory: []
                 };
                 updateDataAndSync([safeData, ...data]); 
                 setIsModalOpen(false); setCurrentTab(regTab);
@@ -339,6 +346,12 @@
                 if(!confirm("전환하시겠습니까?")) return;
                 const updated = { ...selectedItem, tab: 'active', payStatus: '유료', contractStart: TODAY };
                 updateDataAndSync(data.map(item => item.id === updated.id ? updated : item)); setSelectedItem(updated); setCurrentTab('active');
+            };
+
+            const convertToFailed = () => {
+                if(!confirm("영업 실패 처리하시겠습니까? (해지 거래처 탭으로 이동합니다)")) return;
+                const updated = { ...selectedItem, tab: 'terminated', payStatus: '영업실패' };
+                updateDataAndSync(data.map(item => item.id === updated.id ? updated : item)); setSelectedItem(updated); setCurrentTab('terminated');
             };
 
             const handleAddHistory = (e) => {
@@ -456,6 +469,43 @@
                     return matchSearch && matchCity && matchDistrict && matchPayStatus && matchCollection && matchCompletion;
                 });
             }, [enrichedData, currentTab, search, filterCity, filterDistrict, filterPayStatus, filterCollection, filterCompletion]);
+
+            const TAB_LABELS = { active: "방역거래처", prospect: "영업처", paused: "일시중지", terminated: "해지거래처" };
+
+            const exportToExcel = () => {
+                if (!currentList || currentList.length === 0) { alert("⚠️ 다운로드할 데이터가 없습니다. (현재 필터에 해당하는 업체가 없습니다)"); return; }
+
+                const rows = currentList.map(r => ({
+                    "상호명": r.name || "",
+                    "담당 대원": r.manager || "",
+                    "연락처": r.phone || "",
+                    "시/도": r.gu || "",
+                    "구/군": r.dong || "",
+                    "상세주소": r.address || "",
+                    "평수(면적)": r.area || "",
+                    "방역시작일": r.contractStart || "",
+                    "방역주기": r.cycle || "",
+                    "방역구분": r.serviceType === "무료" ? "배민" : (r.serviceType || ""),
+                    "결제방식": r.payMethod || "",
+                    "결제상태": r.payStatus === "무료" ? "배민" : (r.payStatus || ""),
+                    "계약금액": r.fee || "",
+                    "제공 서비스": r.providedService || "",
+                    "영업일자": r.salesDate || "",
+                    "사업자번호": r.bizNumber || "",
+                    "대표자명": r.clientRepName || ""
+                }));
+
+                const ws = XLSX.utils.json_to_sheet(rows);
+                ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(10, k.length + 4) }));
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "업체목록");
+
+                const tabLabel = TAB_LABELS[currentTab] || currentTab;
+                const regionLabel = filterCity ? `_${filterCity}${filterDistrict ? '_' + filterDistrict : ''}` : "";
+                const fileName = `${tabLabel}${regionLabel}_${TODAY}.xlsx`;
+
+                XLSX.writeFile(wb, fileName);
+            };
 
             const activeData = enrichedData.filter(d => d.tab === 'active');
             const leeCount = activeData.filter(d => d.manager === '이원식').length;
@@ -596,6 +646,7 @@
                                                 <option value="">수금 상태 전체</option><option value="미수금">🚨 미수금 업체만</option><option value="수금완료">수금 완료</option>
                                             </select>
                                             <button onClick={() => alert("대원 관리 시스템 준비중")} className="px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-700 flex items-center gap-1 shadow-sm hover:bg-gray-50">⚙️ 대원 관리</button>
+                                            <button onClick={exportToExcel} className="px-4 py-2.5 bg-green-50 border border-green-300 text-green-800 rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm hover:bg-green-100">📥 엑셀 다운로드 ({currentList.length}건)</button>
                                         </div>
                                         <button onClick={() => { setIsModalOpen(true); setRegError(""); setRegKind(currentTab === "prospect" ? "prospect" : "active"); }} className="bg-[#0B5E4D] text-white font-bold text-xs px-5 py-2.5 rounded-xl hover:opacity-95 shadow-sm whitespace-nowrap">+ 신규 등록</button>
                                     </div>
@@ -691,7 +742,10 @@
                                         {detailTab === "info" && (
                                             <div className="space-y-4 animate-fade-in">
                                                 {selectedItem.tab === "prospect" && (
-                                                    <button onClick={convertToActive} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-sm font-bold shadow-sm animate-pulse mb-2">🎉 계약 성공 (방역 거래처로 전환)</button>
+                                                    <div className="flex gap-2 mb-2">
+                                                        <button onClick={convertToActive} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-sm font-bold shadow-sm animate-pulse">🎉 계약 성공 (방역 거래처로 전환)</button>
+                                                        <button onClick={convertToFailed} className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-xl text-sm font-bold shadow-sm">😥 영업 실패</button>
+                                                    </div>
                                                 )}
 
                                                 {isEditing ? (
@@ -705,6 +759,9 @@
                                                             
                                                             <label className="col-span-1"><b>담당 대원 *</b><select value={editForm.manager || ""} onChange={e=>setEditForm({...editForm, manager: e.target.value})} className="border p-2 w-full rounded outline-none">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
                                                             <label className="col-span-1"><b>연락처 *</b><input value={editForm.phone || ""} onChange={e=>setEditForm({...editForm, phone: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="필수 입력" /></label>
+                                                            {editForm.tab === "prospect" && (
+                                                                <label className="col-span-2"><b>영업일자</b><input type="date" value={editForm.salesDate || ""} onChange={e=>setEditForm({...editForm, salesDate: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
+                                                            )}
                                                             
                                                             <label className="col-span-2 flex gap-2">
                                                                 <div className="flex-1"><b>시/도 *</b><select value={editForm.gu || "부산"} onChange={e=>setEditForm({...editForm, gu: e.target.value, dong: REGIONS[e.target.value][0]})} className="border p-2 w-full rounded-lg mt-1 bg-white">{Object.keys(REGIONS).map(r=><option key={r}>{r}</option>)}</select></div>
@@ -771,6 +828,9 @@
 
                                                         <div><p className="text-gray-400">담당 대원</p><p className="font-bold mt-1">{selectedItem.manager}</p></div>
                                                         <div><p className="text-gray-400">연락처</p><p className="font-bold mt-1">{selectedItem.phone}</p></div>
+                                                        {selectedItem.tab === "prospect" && (
+                                                            <div className="col-span-2"><p className="text-gray-400">영업일자</p><p className="font-mono font-bold text-amber-700 mt-1">{selectedItem.salesDate || "미기입"}</p></div>
+                                                        )}
                                                         <div className="col-span-2"><p className="text-gray-400">주소</p><p className="font-bold mt-1"><span className="font-normal text-gray-600">{selectedItem.gu} {selectedItem.dong}</span> {selectedItem.address}</p></div>
                                                         
                                                         <div className="col-span-2 border-t pt-3 mt-1 grid grid-cols-2 gap-4">
@@ -1084,8 +1144,11 @@
                                     {regKind === "active" && (<>
                                     <label className="col-span-1"><b>대표자명 (선택)</b><input name="clientRepName" className="w-full p-2 border rounded-lg mt-1" placeholder="업체 대표 이름" /></label>
                                     <label className="col-span-1"><b>사업자번호 (선택)</b><input name="bizNumber" className="w-full p-2 border rounded-lg mt-1" placeholder="숫자만 입력" /></label>
-                                    <label className="col-span-1"><b>담당 대원 *</b><select name="manager" className="w-full p-2 border rounded-lg mt-1">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
                                     </>)}
+                                    <label className="col-span-1"><b>담당 대원 *</b><select name="manager" className="w-full p-2 border rounded-lg mt-1">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
+                                    {regKind === "prospect" && (
+                                    <label className="col-span-1"><b>영업일자 *</b><input type="date" name="salesDate" defaultValue={TODAY} className="w-full p-2 border rounded-lg mt-1" /></label>
+                                    )}
                                     <label className={regKind === "active" ? "col-span-1" : "col-span-2"}><b>연락처 *</b><input name="phone" className="w-full p-2 border rounded-lg mt-1" placeholder="필수 입력" /></label>
                                     <label className="col-span-2 flex gap-2">
                                         <div className="flex-1"><b>시/도 *</b><select name="gu" value={regCity} onChange={e=>setRegCity(e.target.value)} className="border p-2 w-full rounded-lg mt-1 bg-white">{Object.keys(REGIONS).map(r=><option key={r} value={r}>{r}</option>)}</select></div>
