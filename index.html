@@ -17,7 +17,8 @@
             #cert-print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; }
             #cert-modal-outer { position: static !important; display: block !important; height: auto !important; max-height: none !important; overflow: visible !important; padding: 0 !important; background: white !important; }
             #cert-modal-inner { position: static !important; display: block !important; height: auto !important; max-height: none !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
-            @page { size: A4 portrait; margin: 18mm; }
+            #cert-print-area table, #cert-print-area .mt-28 { page-break-inside: avoid; break-inside: avoid; }
+            @page { size: A4 portrait; margin: 14mm; }
             body { background-color: white; }
         }
     </style>
@@ -1131,8 +1132,8 @@
                                         <p className="text-[10px] text-gray-500 font-medium">■ 감염병의 예방 및 관리에 관한 법률 시행규칙 [별지 제28호서식]</p>
                                         <p className="font-bold text-[13px]">{certNumber}</p>
                                     </div>
-                                    <h2 className="text-center text-3xl font-black tracking-[0.6em] my-10 pt-4">소 독 증 명 서</h2>
-                                    <table className="w-full border-collapse border border-black text-left my-10">
+                                    <h2 className="text-center text-3xl font-black tracking-[0.6em] my-10 pt-4 print:my-5 print:pt-2">소 독 증 명 서</h2>
+                                    <table className="w-full border-collapse border border-black text-left my-10 print:my-5">
                                         <tbody>
                                             <tr>
                                                 <td className="border border-black p-5 bg-gray-50 font-bold text-center w-28 text-[14px]" rowSpan="2">대상 시설</td>
@@ -1173,9 +1174,9 @@
                                             </tr>
                                         </tbody>
                                     </table>
-                                    <p className="my-20 text-[14px] text-justify leading-loose text-gray-900 px-3">&nbsp;&nbsp;&nbsp;「감염병의 예방 및 관리에 관한 법률」 제54조제1항 및 같은 법 시행규칙 제40조제2항에 따라 위와 같이 소독을 실시하였음을 증명합니다.</p>
-                                    <h3 className="text-center font-bold text-[15px] my-16 tracking-widest">{certEntry.date ? certEntry.date.split('-')[0] : '2026'} 년 &nbsp;&nbsp;&nbsp;&nbsp; {certEntry.date ? certEntry.date.split('-')[1] : '06'} 월 &nbsp;&nbsp;&nbsp;&nbsp; {certEntry.date ? certEntry.date.split('-')[2] : '01'} 일</h3>
-                                    <div className="mt-28 pt-10 border-t border-black text-[13px] space-y-3 relative">
+                                    <p className="my-20 text-[14px] text-justify leading-loose text-gray-900 px-3 print:my-8">&nbsp;&nbsp;&nbsp;「감염병의 예방 및 관리에 관한 법률」 제54조제1항 및 같은 법 시행규칙 제40조제2항에 따라 위와 같이 소독을 실시하였음을 증명합니다.</p>
+                                    <h3 className="text-center font-bold text-[15px] my-16 tracking-widest print:my-8">{certEntry.date ? certEntry.date.split('-')[0] : '2026'} 년 &nbsp;&nbsp;&nbsp;&nbsp; {certEntry.date ? certEntry.date.split('-')[1] : '06'} 월 &nbsp;&nbsp;&nbsp;&nbsp; {certEntry.date ? certEntry.date.split('-')[2] : '01'} 일</h3>
+                                    <div className="mt-28 pt-10 border-t border-black text-[13px] space-y-3 relative print:mt-10 print:pt-6">
                                         <p className="flex justify-between"><span><b>소독 실시자 상호(명칭)</b></span> <span className="font-bold text-right text-[14px]">{CERT_ISSUER.name}</span></p>
                                         <p className="flex justify-between"><span><b>소재지</b></span> <span className="text-right text-gray-700 text-[13px]">{CERT_ISSUER.address}</span></p>
                                         <p className="flex justify-between relative">
