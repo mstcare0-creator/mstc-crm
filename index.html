@@ -955,7 +955,7 @@
                                                             {p.note && <p className="text-[11px] text-gray-500 pt-1">메모: {p.note}</p>}
                                                         </div>
                                                         {showPayForm && editingPayId === p.id && (() => {
-                                                            const RenderInlineForm = () => (
+                                                            return (
                                                                 <form onSubmit={handleAddPayment} className="border p-4 rounded-2xl shadow-sm space-y-4 text-xs bg-indigo-50/30 border-indigo-200">
                                                                     <p className="font-bold border-b pb-2 text-indigo-800 border-indigo-200">
                                                                         ✏️ 수금 내역 수정 (미수금 상환)
@@ -985,7 +985,6 @@
                                                                     </div>
                                                                 </form>
                                                             );
-                                                            return <RenderInlineForm />;
                                                         })()}
                                                         </React.Fragment>
                                                     ))}
