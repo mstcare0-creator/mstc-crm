@@ -930,16 +930,18 @@
                                                 <div className="space-y-3">
                                                     {filteredPayment.map((p) => (
                                                         <div key={p.id} className={`p-4 bg-white border border-gray-200 rounded-2xl text-xs space-y-1 relative group transition-all ${editingPayId === p.id ? 'bg-indigo-50/50 border-indigo-300' : 'hover:border-amber-300'}`}>
-                                                            <div className="absolute top-3 right-3 flex gap-1">
-                                                                <button onClick={() => handleEditPayInit(p)} className="text-gray-500 active:text-indigo-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">✏️ 수정</button>
-                                                                <button onClick={() => handleDeletePayment(p.id)} className="text-gray-400 active:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
-                                                            </div>
-                                                            <div className="flex justify-between items-center mb-1 pr-24">
+                                                            <div className="flex justify-between items-center mb-1">
                                                                 {/* 💡 [배민 패치] 수금내역 카드 텍스트 변경 */}
                                                                 <span className={`font-bold text-sm ${p.status === '미수금' ? 'text-red-600' : p.status === '무료' ? 'text-teal-600' : 'text-blue-600'}`}>
                                                                     {p.status === '무료' ? '🛵 배민' : `💰 ${p.status}`}
                                                                 </span>
-                                                                <span className="font-mono text-gray-400 text-[11px]">{p.month}</span>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="font-mono text-gray-400 text-[11px]">{p.month}</span>
+                                                                    <div className="flex gap-1 shrink-0">
+                                                                        <button onClick={() => handleEditPayInit(p)} className="text-gray-500 active:text-indigo-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">✏️ 수정</button>
+                                                                        <button onClick={() => handleDeletePayment(p.id)} className="text-gray-400 active:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                             <p className="text-[12px] font-bold text-gray-800">
                                                                 금액: ₩{Number(p.amount).toLocaleString()}
@@ -1096,13 +1098,15 @@
                                                 <div className="space-y-3">
                                                     {filteredHistory.map((h) => (
                                                         <div key={h.id} className={`p-4 bg-white border border-gray-200 rounded-2xl text-xs space-y-1 relative group hover:border-[#0B5E4D] transition-all`}>
-                                                            <div className="absolute top-3 right-3 flex gap-1">
-                                                                <button onClick={() => handleEditHistoryInit(h)} className="text-gray-500 active:text-blue-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">✏️ 수정</button>
-                                                                <button onClick={() => handleDeleteHistory(h.id)} className="text-gray-400 active:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
-                                                            </div>
-                                                            <div className="flex justify-between items-center mb-1 pr-24">
+                                                            <div className="flex justify-between items-center mb-1">
                                                                 <span className="font-bold text-emerald-800 text-sm">✅ {h.type} 완료</span>
-                                                                <span className="font-mono text-gray-400 text-[11px]">{h.date}</span>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="font-mono text-gray-400 text-[11px]">{h.date}</span>
+                                                                    <div className="flex gap-1 shrink-0">
+                                                                        <button onClick={() => handleEditHistoryInit(h)} className="text-gray-500 active:text-blue-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">✏️ 수정</button>
+                                                                        <button onClick={() => handleDeleteHistory(h.id)} className="text-gray-400 active:text-red-600 text-[10px] font-bold bg-white px-2 py-1 rounded shadow-sm border">🗑️ 삭제</button>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                             {h.time && <p className="text-[11px] text-gray-700 font-bold mt-1">⏰ 진행시간: {h.time}</p>}
                                                             {h.methods && h.methods.length > 0 && <p className="text-[11px] text-gray-700 font-bold mt-1">🔨 방식: {h.methods.join(", ")}</p>}
