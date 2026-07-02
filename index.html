@@ -211,6 +211,7 @@
 
             const [currentTab, setCurrentTab] = useState("active");
             const [reportMonth, setReportMonth] = useState(CURRENT_MONTH);
+            const [reportStaff, setReportStaff] = useState("");
             const [search, setSearch] = useState("");
             const [filterCity, setFilterCity] = useState("");
             const [filterDistrict, setFilterDistrict] = useState("");
@@ -667,27 +668,47 @@
                                 {currentTab === "report" ? (
                                     // ── 📋 방역 현황 탭 ──────────────────────────────
                                     (() => {
-                                        const reportRecords = [];
+                                        const allRecords = [];
                                         enrichedData.filter(d => d.tab === 'active').forEach(item => {
                                             (item.history || []).forEach(h => {
                                                 if (h.type === "방역" && (h.date || "").startsWith(reportMonth)) {
-                                                    reportRecords.push({ item, h });
+                                                    allRecords.push({ item, h });
                                                 }
                                             });
                                         });
-                                        reportRecords.sort((a, b) => (a.h.date || "").localeCompare(b.h.date || ""));
+                                        allRecords.sort((a, b) => (a.h.date || "").localeCompare(b.h.date || ""));
+                                        const reportRecords = reportStaff ? allRecords.filter(r => r.h.author === reportStaff) : allRecords;
+                                        const exportReport = () => {
+                                            if (!reportRecords.length) { alert("다운로드할 기록이 없습니다."); return; }
+                                            const rows = reportRecords.map(({ item, h }) => ({
+                                                "방역일자": h.date || "", "방문시간": h.time || "", "상호명": item.name || "",
+                                                "시/도": item.gu || "", "구/군": item.dong || "", "주소": item.address || "",
+                                                "출동대원": h.author || "", "처리종류": (h.methods || []).join(", "),
+                                                "사용약품": (h.chemicals || []).join(", "), "이슈사항": h.issue || ""
+                                            }));
+                                            const ws = XLSX.utils.json_to_sheet(rows);
+                                            ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(10, k.length + 4) }));
+                                            const wb = XLSX.utils.book_new();
+                                            XLSX.utils.book_append_sheet(wb, ws, "방역현황");
+                                            XLSX.writeFile(wb, `방역현황_${reportMonth}${reportStaff ? '_' + reportStaff : ''}.xlsx`);
+                                        };
                                         return (
-                                            <div>
-                                                <div className="flex items-center gap-3 mb-4">
+                                            <div key="report-view">
+                                                <div className="flex flex-wrap items-center gap-2 mb-4">
                                                     <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="text-sm p-2 border rounded-xl outline-none font-bold bg-white" />
-                                                    <span className="text-xs text-gray-500 font-bold">{reportMonth} 방역 완료 <span className="text-blue-700">{reportRecords.length}건</span></span>
+                                                    <select value={reportStaff} onChange={e => setReportStaff(e.target.value)} className="text-sm p-2 border rounded-xl outline-none font-bold bg-white">
+                                                        <option value="">전체 대원</option>
+                                                        {STAFF.map(s => <option key={s} value={s}>{s}</option>)}
+                                                    </select>
+                                                    <span className="text-xs text-gray-500 font-bold flex-1">총 <span className="text-blue-700">{reportRecords.length}건</span></span>
+                                                    <button onClick={exportReport} className="px-4 py-2 bg-green-50 border border-green-300 text-green-800 rounded-xl text-xs font-bold hover:bg-green-100">📥 엑셀 다운로드</button>
                                                 </div>
                                                 {reportRecords.length === 0 ? (
                                                     <div className="text-center py-16 text-gray-400 text-sm">해당 월의 방역 기록이 없습니다.</div>
                                                 ) : (
                                                     <div className="space-y-3">
-                                                        {reportRecords.map(({ item, h }, idx) => (
-                                                            <div key={h.id} className="bg-white border border-gray-200 rounded-2xl p-4 text-xs hover:border-blue-300 transition-all">
+                                                        {reportRecords.map(({ item, h }) => (
+                                                            <div key={`r-${h.id}`} className="bg-white border border-gray-200 rounded-2xl p-4 text-xs hover:border-blue-300 transition-all">
                                                                 <div className="flex justify-between items-start mb-1">
                                                                     <div>
                                                                         <span className="font-bold text-sm text-gray-800">{item.name}</span>
@@ -700,14 +721,10 @@
                                                                 </div>
                                                                 <div className="flex flex-wrap gap-1 mt-1">
                                                                     <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded">👤 {h.author}</span>
-                                                                    {h.methods && h.methods.map(m => <span key={m} className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold">{m}</span>)}
-                                                                    {h.chemicals && h.chemicals.length > 0 && <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded">💊 {h.chemicals.join(", ")}</span>}
+                                                                    {(h.methods || []).map(m => <span key={m} className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold">{m}</span>)}
+                                                                    {(h.chemicals || []).length > 0 && <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded">💊 {h.chemicals.join(", ")}</span>}
                                                                 </div>
-                                                                {h.issue && (
-                                                                    <div className="mt-2 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5 text-red-700 font-bold">
-                                                                        ⚠️ 이슈: {h.issue}
-                                                                    </div>
-                                                                )}
+                                                                {h.issue && <div className="mt-2 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5 text-red-700 font-bold">⚠️ 이슈: {h.issue}</div>}
                                                             </div>
                                                         ))}
                                                     </div>
@@ -716,7 +733,7 @@
                                         );
                                     })()
                                 ) : (
-                                <div>
+                                <div key="list-view">
                                 <div className="flex flex-col gap-2 mb-6 bg-gray-50/50 p-3 rounded-xl border border-gray-100">
                                     <div className="flex flex-wrap gap-2">
                                         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="상호명, 담당자, 주소 검색" className="text-xs p-2.5 rounded-xl border bg-white outline-none flex-1 min-w-[150px] font-medium" />
