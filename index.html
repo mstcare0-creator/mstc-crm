@@ -237,7 +237,7 @@
             const [editingHistoryId, setEditingHistoryId] = useState(null);
 
             const [showPayForm, setShowPayForm] = useState(false);
-            const [payForm, setPayForm] = useState({ month: CURRENT_MONTH, amount: "30000", status: "수금완료", method: "계좌이체", note: "" });
+            const [payForm, setPayForm] = useState({ month: CURRENT_MONTH, amount: "30000", status: "수금완료", method: "계좌이체", note: "", serviceItem: "정기방역" });
             const [editingPayId, setEditingPayId] = useState(null);
 
             const [customMethodInput, setCustomMethodInput] = useState("");
@@ -415,20 +415,20 @@
                 let updatedPayList;
                 if (editingPayId) {
                     updatedPayList = selectedItem.paymentHistory.map(p => 
-                        p.id === editingPayId ? { ...p, month: payForm.month, amount: payForm.amount, status: payForm.status, method: payForm.method, note: payForm.note } : p
+                        p.id === editingPayId ? { ...p, month: payForm.month, amount: payForm.amount, status: payForm.status, method: payForm.method, note: payForm.note, serviceItem: payForm.serviceItem || "정기방역" } : p
                     );
                 } else {
-                    const newPay = { id: Date.now(), month: payForm.month, amount: payForm.amount, status: payForm.status, method: payForm.method, note: payForm.note };
+                    const newPay = { id: Date.now(), month: payForm.month, amount: payForm.amount, status: payForm.status, method: payForm.method, note: payForm.note, serviceItem: payForm.serviceItem || "정기방역" };
                     updatedPayList = [newPay, ...(selectedItem.paymentHistory || [])];
                 }
                 const updatedItem = { ...selectedItem, paymentHistory: updatedPayList };
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item));
                 setSelectedItem(updatedItem); setShowPayForm(false); setEditingPayId(null);
-                setPayForm({ month: CURRENT_MONTH, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "" });
+                setPayForm({ month: CURRENT_MONTH, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "", serviceItem: "정기방역" });
             };
 
             const handleEditPayInit = (p) => {
-                setPayForm({ month: p.month, amount: p.amount, status: p.status, method: p.method || "계좌이체", note: p.note || "" });
+                setPayForm({ month: p.month, amount: p.amount, status: p.status, method: p.method || "계좌이체", note: p.note || "", serviceItem: p.serviceItem || "정기방역" });
                 setEditingPayId(p.id); setShowPayForm(true); setShowHistoryForm(false); setIsEditing(false);
             };
 
@@ -714,7 +714,7 @@
                                                             <span className={`text-[10px] px-1.5 py-0.5 rounded border shadow-sm ${item.parking === 'X' ? 'bg-red-50 text-red-700 border-red-200 font-bold' : item.parking === '△' ? 'bg-amber-50 text-amber-700 border-amber-200 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>🚗 주차 {item.parking || 'O'}</span>
                                                             <span className={`text-[10px] px-1.5 py-0.5 rounded border shadow-sm ${item.photoReq === 'O' ? 'bg-blue-50 text-blue-700 border-blue-200 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>📸 사진 {item.photoReq || 'X'}</span>
                                                             <span className={`text-[10px] px-1.5 py-0.5 rounded border shadow-sm ${item.bugZapper && item.bugZapper !== '없음' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>💡 포충기 {item.bugZapper || '없음'}</span>
-                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded border shadow-sm ${item.trapReq === 'O' ? 'bg-purple-50 text-purple-700 border-purple-200 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>🪤 쥐트랩 {item.trapReq || 'X'}</span>
+                                                            {(item.trapReq === 'O') && <span className="text-[10px] px-1.5 py-0.5 rounded border shadow-sm bg-purple-50 text-purple-700 border-purple-200 font-bold">🐀 쥐트랩 O</span>}
                                                         </div>
 
                                                         {(item.etcInfo || item.keyInfo) && (
@@ -861,7 +861,7 @@
                                                                 <div className="bg-gray-50 p-2 rounded-lg"><p className="text-gray-400 mb-1">🚗 주차</p><p className={`font-bold ${selectedItem.parking === 'X' ? 'text-red-600' : 'text-gray-800'}`}>{selectedItem.parking || "O"}</p></div>
                                                                 <div className="bg-gray-50 p-2 rounded-lg"><p className="text-gray-400 mb-1">📸 사진</p><p className={`font-bold ${selectedItem.photoReq === 'O' ? 'text-blue-600' : 'text-gray-800'}`}>{selectedItem.photoReq || "X"}</p></div>
                                                                 <div className="bg-gray-50 p-2 rounded-lg"><p className="text-gray-400 mb-1">💡 포충기</p><p className="font-bold text-gray-800">{selectedItem.bugZapper || "없음"}</p></div>
-                                                                <div className="bg-gray-50 p-2 rounded-lg"><p className="text-gray-400 mb-1">🪤 쥐트랩</p><p className="font-bold text-gray-800">{selectedItem.trapReq || "X"}</p></div>
+                                                                <div className="bg-gray-50 p-2 rounded-lg"><p className="text-gray-400 mb-1">🐀 쥐트랩</p><p className="font-bold text-gray-800">{selectedItem.trapReq || "X"}</p></div>
                                                             </div>
                                                         </div>
 
@@ -946,6 +946,18 @@
                                                                     </select>
                                                                 </label>
 
+                                                                <label className="block"><b>서비스 항목</b>
+                                                                    <select value={payForm.serviceItem || "정기방역"} onChange={e => setPayForm({...payForm, serviceItem: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white font-bold text-gray-700">
+                                                                        <option value="정기방역">정기방역</option>
+                                                                        <option value="분기방역">분기방역</option>
+                                                                        <option value="특수방역">특수방역</option>
+                                                                        <option value="포충기관리">포충기 관리</option>
+                                                                        <option value="쥐트랩관리">쥐트랩 관리</option>
+                                                                        <option value="배민">🛵 배민</option>
+                                                                        <option value="기타">기타</option>
+                                                                    </select>
+                                                                </label>
+
                                                                 <label className="block"><b>결제/미수 금액 (원)</b><input type="tel" inputMode="numeric" pattern="[0-9]*" value={payForm.amount} onChange={e => setPayForm({...payForm, amount: e.target.value.replace(/[^0-9]/g, "")})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" required /></label>
                                                                 <label className="block"><b>결제 방식</b><select value={payForm.method} onChange={e => setPayForm({...payForm, method: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none font-bold bg-white"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>기타</option></select></label>
                                                                 <label className="block col-span-2"><b>메모 (페이소프트, 입금자명 등)</b><input type="text" value={payForm.note} onChange={e => setPayForm({...payForm, note: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" placeholder="비고란" /></label>
@@ -989,7 +1001,8 @@
                                                             </div>
                                                             <p className="text-[12px] font-bold text-gray-800">
                                                                 금액: ₩{Number(p.amount).toLocaleString()}
-                                                                {p.method && <span className="ml-2 text-[10px] text-gray-500 font-normal bg-gray-100 px-1.5 py-0.5 rounded">[{p.method}]</span>}
+                                                                {p.serviceItem && <span className="ml-2 text-[10px] text-[#0B5E4D] font-bold bg-emerald-50 px-1.5 py-0.5 rounded">{p.serviceItem}</span>}
+                                                                {p.method && <span className="ml-1 text-[10px] text-gray-500 font-normal bg-gray-100 px-1.5 py-0.5 rounded">[{p.method}]</span>}
                                                             </p>
                                                             {p.note && <p className="text-[11px] text-gray-500 pt-1">메모: {p.note}</p>}
                                                         </div>
@@ -1012,6 +1025,17 @@
                                                                                 <option value="수금완료">수금완료</option>
                                                                                 <option value="미수금">미수금</option>
                                                                                 <option value="무료">🛵 배민</option>
+                                                                            </select>
+                                                                        </label>
+                                                                        <label className="block"><b>서비스 항목</b>
+                                                                            <select value={payForm.serviceItem || "정기방역"} onChange={e => setPayForm({...payForm, serviceItem: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white font-bold text-gray-700">
+                                                                                <option value="정기방역">정기방역</option>
+                                                                                <option value="분기방역">분기방역</option>
+                                                                                <option value="특수방역">특수방역</option>
+                                                                                <option value="포충기관리">포충기 관리</option>
+                                                                                <option value="쥐트랩관리">쥐트랩 관리</option>
+                                                                                <option value="배민">🛵 배민</option>
+                                                                                <option value="기타">기타</option>
                                                                             </select>
                                                                         </label>
                                                                         <label className="block"><b>결제/미수 금액 (원)</b><input type="tel" inputMode="numeric" pattern="[0-9]*" value={payForm.amount} onChange={e => setPayForm({...payForm, amount: e.target.value.replace(/[^0-9]/g, "")})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" required /></label>
