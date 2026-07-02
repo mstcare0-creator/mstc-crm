@@ -52,34 +52,61 @@
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
 
+            // ID 기준 + 이름+연락처 기준 중복 제거 + 가나다 정렬
+            const dedupeAndSort = (arr) => {
+                const seenId = new Set();
+                const seenNamePhone = new Set();
+                return arr
+                    .filter(item => {
+                        if (!item) return false;
+                        // ID가 있으면 ID 기준 중복 제거
+                        if (item.id) {
+                            if (seenId.has(String(item.id))) return false;
+                            seenId.add(String(item.id));
+                        }
+                        // 이름+연락처 기준으로도 중복 제거 (ID 없거나 달라도 같은 업체면 제거)
+                        const namePhone = `${item.name || ""}__${item.phone || ""}`;
+                        if (seenNamePhone.has(namePhone)) return false;
+                        seenNamePhone.add(namePhone);
+                        return true;
+                    })
+                    .sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
+            };
+
+            // fetch 중복 실행 방지 플래그
+            let dataFetched = false;
+
             useEffect(() => {
+                if (dataFetched) return;
+                dataFetched = true;
                 fetch(GOOGLE_SCRIPT_URL)
                     .then(res => res.json())
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
-                            const sorted = [...fetchedData].sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
-                            setData(sorted);
-                            localStorage.setItem("mstc_crm_data_v50", JSON.stringify(sorted));
+                            const clean = dedupeAndSort(fetchedData);
+                            setData(clean);
+                            localStorage.setItem("mstc_crm_data_v50", JSON.stringify(clean));
                         } else {
                             const local = localStorage.getItem("mstc_crm_data_v50");
-                            if(local) setData(JSON.parse(local));
+                            if(local) setData(dedupeAndSort(JSON.parse(local)));
                         }
                         setLoading(false);
                     })
                     .catch(err => {
                         const local = localStorage.getItem("mstc_crm_data_v50");
-                        if(local) setData(JSON.parse(local));
+                        if(local) setData(dedupeAndSort(JSON.parse(local)));
                         setLoading(false);
                     });
             }, []);
 
             const updateDataAndSync = (newData) => {
-                setData(newData);
-                localStorage.setItem("mstc_crm_data_v50", JSON.stringify(newData)); 
+                const clean = dedupeAndSort(newData);
+                setData(clean);
+                localStorage.setItem("mstc_crm_data_v50", JSON.stringify(clean)); 
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ data: newData })
+                    body: JSON.stringify({ data: clean })
                 }).catch(err => console.log("전송 지연"));
             };
 
