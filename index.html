@@ -210,6 +210,7 @@
             };
 
             const [currentTab, setCurrentTab] = useState("active");
+            const [reportMonth, setReportMonth] = useState(CURRENT_MONTH);
             const [search, setSearch] = useState("");
             const [filterCity, setFilterCity] = useState("");
             const [filterDistrict, setFilterDistrict] = useState("");
@@ -233,7 +234,7 @@
             const [editError, setEditError] = useState("");
 
             const [showHistoryForm, setShowHistoryForm] = useState(false);
-            const [historyForm, setHistoryForm] = useState({ date: TODAY, time: "", type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", author: "이원식" });
+            const [historyForm, setHistoryForm] = useState({ date: TODAY, time: "", type: "방역", methods: ["살충"], chemicals: ["롱다운플러스"], note: "", issue: "", author: "이원식" });
             const [editingHistoryId, setEditingHistoryId] = useState(null);
 
             const [showPayForm, setShowPayForm] = useState(false);
@@ -388,10 +389,10 @@
                 let updatedHistoryList;
                 if (editingHistoryId) {
                     updatedHistoryList = selectedItem.history.map(h => 
-                        h.id === editingHistoryId ? { ...h, date: historyForm.date, time: historyForm.time, type: historyForm.type, author: historyForm.author, content: contentStr, methods: historyForm.type === "방역" ? historyForm.methods : [], chemicals: historyForm.type === "방역" ? historyForm.chemicals : [] } : h
+                        h.id === editingHistoryId ? { ...h, date: historyForm.date, time: historyForm.time, type: historyForm.type, author: historyForm.author, content: contentStr, issue: historyForm.issue || "", methods: historyForm.type === "방역" ? historyForm.methods : [], chemicals: historyForm.type === "방역" ? historyForm.chemicals : [] } : h
                     );
                 } else {
-                    const newLog = { id: Date.now(), date: historyForm.date, time: historyForm.time, type: historyForm.type, author: historyForm.author, content: contentStr, methods: historyForm.type === "방역" ? historyForm.methods : [], chemicals: historyForm.type === "방역" ? historyForm.chemicals : [] };
+                    const newLog = { id: Date.now(), date: historyForm.date, time: historyForm.time, type: historyForm.type, author: historyForm.author, content: contentStr, issue: historyForm.issue || "", methods: historyForm.type === "방역" ? historyForm.methods : [], chemicals: historyForm.type === "방역" ? historyForm.chemicals : [] };
                     updatedHistoryList = [newLog, ...(selectedItem.history || [])];
                 }
                 const updatedItem = { ...selectedItem, history: updatedHistoryList };
@@ -400,7 +401,7 @@
             };
 
             const handleEditHistoryInit = (h) => {
-                setHistoryForm({ date: h.date, time: h.time || h.startTime || "", type: h.type, author: h.author || selectedItem.manager, methods: h.methods || [], chemicals: h.chemicals || [], note: h.type === "방역" ? "" : h.content });
+                setHistoryForm({ date: h.date, time: h.time || h.startTime || "", type: h.type, author: h.author || selectedItem.manager, methods: h.methods || [], chemicals: h.chemicals || [], note: h.type === "방역" ? "" : h.content, issue: h.issue || "" });
                 setEditingHistoryId(h.id); setShowHistoryForm(true); setShowPayForm(false); setIsEditing(false);
             };
 
@@ -660,8 +661,62 @@
                                     <button onClick={() => { setCurrentTab("prospect"); setSelectedItem(null); }} className={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'prospect' ? 'bg-white text-emerald-800 shadow-sm border' : 'text-gray-500'}`}>영업처 ({enrichedData.filter(d=>d.tab==='prospect').length})</button>
                                     <button onClick={() => { setCurrentTab("paused"); setSelectedItem(null); }} className={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'paused' ? 'bg-white text-amber-700 shadow-sm border' : 'text-gray-500'}`}>일시중지 ({enrichedData.filter(d=>d.tab==='paused').length})</button>
                                     <button onClick={() => { setCurrentTab("terminated"); setSelectedItem(null); }} className={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'terminated' ? 'bg-white text-red-700 shadow-sm border' : 'text-gray-500'}`}>해지 거래처 ({enrichedData.filter(d=>d.tab==='terminated').length})</button>
+                                    <button onClick={() => { setCurrentTab("report"); setSelectedItem(null); }} className={`flex-1 min-w-[80px] py-2 text-xs font-bold rounded-lg transition-all ${currentTab === 'report' ? 'bg-white text-blue-700 shadow-sm border' : 'text-gray-500'}`}>📋 방역 현황</button>
                                 </div>
 
+                                {currentTab === "report" ? (
+                                    // ── 📋 방역 현황 탭 ──────────────────────────────
+                                    (() => {
+                                        const reportRecords = [];
+                                        enrichedData.filter(d => d.tab === 'active').forEach(item => {
+                                            (item.history || []).forEach(h => {
+                                                if (h.type === "방역" && (h.date || "").startsWith(reportMonth)) {
+                                                    reportRecords.push({ item, h });
+                                                }
+                                            });
+                                        });
+                                        reportRecords.sort((a, b) => (a.h.date || "").localeCompare(b.h.date || ""));
+                                        return (
+                                            <div>
+                                                <div className="flex items-center gap-3 mb-4">
+                                                    <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="text-sm p-2 border rounded-xl outline-none font-bold bg-white" />
+                                                    <span className="text-xs text-gray-500 font-bold">{reportMonth} 방역 완료 <span className="text-blue-700">{reportRecords.length}건</span></span>
+                                                </div>
+                                                {reportRecords.length === 0 ? (
+                                                    <div className="text-center py-16 text-gray-400 text-sm">해당 월의 방역 기록이 없습니다.</div>
+                                                ) : (
+                                                    <div className="space-y-3">
+                                                        {reportRecords.map(({ item, h }, idx) => (
+                                                            <div key={h.id} className="bg-white border border-gray-200 rounded-2xl p-4 text-xs hover:border-blue-300 transition-all">
+                                                                <div className="flex justify-between items-start mb-1">
+                                                                    <div>
+                                                                        <span className="font-bold text-sm text-gray-800">{item.name}</span>
+                                                                        <span className="ml-2 text-gray-400">{item.gu} {item.dong}</span>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <span className="font-mono text-[#0B5E4D] font-bold">{h.date}</span>
+                                                                        {h.time && <span className="ml-1 text-gray-400"> {h.time}</span>}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                                    <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded">👤 {h.author}</span>
+                                                                    {h.methods && h.methods.map(m => <span key={m} className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold">{m}</span>)}
+                                                                    {h.chemicals && h.chemicals.length > 0 && <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded">💊 {h.chemicals.join(", ")}</span>}
+                                                                </div>
+                                                                {h.issue && (
+                                                                    <div className="mt-2 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5 text-red-700 font-bold">
+                                                                        ⚠️ 이슈: {h.issue}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()
+                                ) : (
+                                <div>
                                 <div className="flex flex-col gap-2 mb-6 bg-gray-50/50 p-3 rounded-xl border border-gray-100">
                                     <div className="flex flex-wrap gap-2">
                                         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="상호명, 담당자, 주소 검색" className="text-xs p-2.5 rounded-xl border bg-white outline-none flex-1 min-w-[150px] font-medium" />
@@ -738,7 +793,8 @@
                                     })}
                                     {currentList.length === 0 && <p className="text-center text-xs text-gray-400 py-8">조회된 업체가 없습니다.</p>}
                                 </div>
-                            </div>
+                                </div>
+                                )}
 
                             {/* 우측 상세창 */}
                             {selectedItem && (
@@ -947,7 +1003,7 @@
                                                                 </label>
 
                                                                 <label className="block"><b>결제/미수 금액 (원)</b><input type="tel" inputMode="numeric" pattern="[0-9]*" value={payForm.amount} onChange={e => setPayForm({...payForm, amount: e.target.value.replace(/[^0-9]/g, "")})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" required /></label>
-                                                                <label className="block"><b>결제 방식</b><select value={payForm.method} onChange={e => setPayForm({...payForm, method: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none font-bold bg-white"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>1회차</option><option>서비스</option><option>기타</option></select></label>
+                                                                <label className="block"><b>결제 방식</b><select value={payForm.method} onChange={e => setPayForm({...payForm, method: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none font-bold bg-white"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>🎁 서비스</option><option>기타</option></select></label>
                                                                 <label className="block col-span-2"><b>메모 (페이소프트, 입금자명 등)</b><input type="text" value={payForm.note} onChange={e => setPayForm({...payForm, note: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" placeholder="비고란" /></label>
                                                             </div>
                                                             <div className="flex gap-2 justify-end pt-2">
@@ -1016,7 +1072,7 @@
                                                                             </select>
                                                                         </label>
                                                                         <label className="block"><b>결제/미수 금액 (원)</b><input type="tel" inputMode="numeric" pattern="[0-9]*" value={payForm.amount} onChange={e => setPayForm({...payForm, amount: e.target.value.replace(/[^0-9]/g, "")})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" required /></label>
-                                                                        <label className="block"><b>결제 방식</b><select value={payForm.method} onChange={e => setPayForm({...payForm, method: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none font-bold bg-white"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>1회차</option><option>서비스</option><option>기타</option></select></label>
+                                                                        <label className="block"><b>결제 방식</b><select value={payForm.method} onChange={e => setPayForm({...payForm, method: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none font-bold bg-white"><option>계좌이체</option><option>카드결제</option><option>무통장입금</option><option>현금</option><option>🎁 서비스</option><option>기타</option></select></label>
                                                                         <label className="block col-span-2"><b>메모 (페이소프트, 입금자명 등)</b><input type="text" value={payForm.note} onChange={e => setPayForm({...payForm, note: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" placeholder="비고란" /></label>
                                                                     </div>
                                                                     <div className="flex gap-2 justify-end pt-2">
@@ -1156,13 +1212,12 @@
                                                             </div>
                                                         )}
                                                         
+                                                        <label className="block text-xs mt-2">
+                                                            <b className="text-red-700">⚠️ 이슈사항 (선택, 소독증명서 미출력)</b>
+                                                            <input type="text" value={historyForm.issue || ""} onChange={e => setHistoryForm({...historyForm, issue: e.target.value})} className="w-full mt-1 p-2 border border-red-200 rounded-lg outline-none bg-red-50/50 text-xs" placeholder="민원, 특이사항, 장비 이상 등" />
+                                                        </label>
+
                                                         <div className="flex gap-2 justify-end pt-2">
-                                                            <button type="button" onClick={() => {setShowHistoryForm(false); setEditingHistoryId(null);}} className="px-4 py-2 border rounded-xl bg-white font-bold shadow-sm">취소</button>
-                                                            <button type="submit" className={`px-5 py-2 text-white rounded-xl font-bold shadow-sm ${editingHistoryId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#0B5E4D] hover:bg-[#084b3e]'}`}>
-                                                                {editingHistoryId ? "수정 사항 저장" : "기록 추가"}
-                                                            </button>
-                                                        </div>
-                                                    </form>
                                                 )}
 
                                                 <div className="flex justify-between items-center bg-gray-50 p-2 rounded-xl border border-gray-100 mt-4">
@@ -1190,6 +1245,7 @@
                                                             {h.methods && h.methods.length > 0 && <p className="text-[11px] text-gray-700 font-bold mt-1">🔨 방식: {h.methods.join(", ")}</p>}
                                                             {h.chemicals && h.chemicals.length > 0 && <p className="text-[11px] text-gray-600 font-medium">💊 약품/장비: {h.chemicals.join(", ")}</p>}
                                                             <p className="text-[10px] text-gray-400 pt-1">출동대원: {h.author}</p>
+                                                            {h.issue && <p className="text-[11px] text-red-600 font-bold bg-red-50 px-2 py-1 rounded mt-1">⚠️ 이슈: {h.issue}</p>}
                                                             {h.type === "방역" && (
                                                                 <button onClick={() => { 
                                                                     setCertEntry(h); 
