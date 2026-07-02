@@ -57,8 +57,9 @@
                     .then(res => res.json())
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
-                            setData(fetchedData);
-                            localStorage.setItem("mstc_crm_data_v50", JSON.stringify(fetchedData));
+                            const sorted = [...fetchedData].sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
+                            setData(sorted);
+                            localStorage.setItem("mstc_crm_data_v50", JSON.stringify(sorted));
                         } else {
                             const local = localStorage.getItem("mstc_crm_data_v50");
                             if(local) setData(JSON.parse(local));
@@ -455,19 +456,30 @@
             const selectedItemPayCount = selectedItem ? (selectedItem.paymentHistory || []).filter(p => p.status === "수금완료" || p.status === "무료").length : 0;
 
             const currentList = useMemo(() => {
-                return enrichedData.filter(r => {
+                const filtered = enrichedData.filter(r => {
                     if (r.tab !== currentTab) return false;
                     const matchSearch = (r.name || "").includes(search) || (r.manager || "").includes(search) || (r.address || "").includes(search);
                     const matchCity = !filterCity || r.gu === filterCity;
                     const matchDistrict = !filterDistrict || r.dong === filterDistrict;
-                    
                     const matchPayStatus = !filterPayStatus || String(r.payStatus || "").trim() === filterPayStatus;
-                    
                     const matchCollection = !filterCollection || (filterCollection === '미수금' ? r.computedDebt > 0 : r.computedDebt === 0);
                     const isCompletedThisMonth = r.history && r.history.some(h => h.type === '방역' && h.date && h.date.startsWith(CURRENT_MONTH));
                     const matchCompletion = !filterCompletion || (filterCompletion === 'completed' ? isCompletedThisMonth : !isCompletedThisMonth);
                     return matchSearch && matchCity && matchDistrict && matchPayStatus && matchCollection && matchCompletion;
                 });
+
+                if (search) {
+                    // 검색 시: 상호명 일치 > 담당대원 일치 > 주소 일치 순 관련도 정렬
+                    return filtered.sort((a, b) => {
+                        const ra = (a.name || "").includes(search) ? 0 : (a.manager || "").includes(search) ? 1 : 2;
+                        const rb = (b.name || "").includes(search) ? 0 : (b.manager || "").includes(search) ? 1 : 2;
+                        if (ra !== rb) return ra - rb;
+                        return (a.name || "").localeCompare(b.name || "", "ko");
+                    });
+                }
+
+                // 기본: 상호명 가나다 순 고정 정렬 (구글 시트 반환 순서와 무관)
+                return [...filtered].sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
             }, [enrichedData, currentTab, search, filterCity, filterDistrict, filterPayStatus, filterCollection, filterCompletion]);
 
             const TAB_LABELS = { active: "방역거래처", prospect: "영업처", paused: "일시중지", terminated: "해지거래처" };
