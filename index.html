@@ -424,7 +424,7 @@
                 const updatedItem = { ...selectedItem, paymentHistory: updatedPayList };
                 updateDataAndSync(data.map(item => item.id === selectedItem.id ? updatedItem : item));
                 setSelectedItem(updatedItem); setShowPayForm(false); setEditingPayId(null);
-                setPayForm({ month: CURRENT_MONTH, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "", };
+                setPayForm({ month: CURRENT_MONTH, amount: selectedItem.fee || "30000", status: "수금완료", method: "계좌이체", note: "" });
             };
 
             const handleEditPayInit = (p) => {
