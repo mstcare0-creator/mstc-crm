@@ -52,24 +52,36 @@
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
 
-            // ID 기준 + 이름+연락처 기준 중복 제거 + 가나다 정렬
+            // 중복 제거: 같은 ID나 이름+연락처가 겹치면 데이터가 더 많은 쪽을 보존
             const dedupeAndSort = (arr) => {
-                const seenId = new Set();
-                const seenNamePhone = new Set();
-                return arr
-                    .filter(item => {
-                        if (!item) return false;
-                        // ID가 있으면 ID 기준 중복 제거
-                        if (item.id) {
-                            if (seenId.has(String(item.id))) return false;
-                            seenId.add(String(item.id));
-                        }
-                        // 이름+연락처 기준으로도 중복 제거 (ID 없거나 달라도 같은 업체면 제거)
-                        const namePhone = `${item.name || ""}__${item.phone || ""}`;
-                        if (seenNamePhone.has(namePhone)) return false;
-                        seenNamePhone.add(namePhone);
-                        return true;
-                    })
+                const byId = new Map();
+                const byNamePhone = new Map();
+
+                arr.forEach(item => {
+                    if (!item) return;
+                    // 데이터 풍부도 점수 (채워진 필드 수)
+                    const score = ['name','phone','address','keyInfo','etcInfo','trapReq','parking','contractStart','fee','cycle'].filter(k => item[k] && item[k] !== '' && item[k] !== 'X').length
+                                + (item.history || []).length + (item.paymentHistory || []).length;
+
+                    if (item.id) {
+                        const key = String(item.id);
+                        const prev = byId.get(key);
+                        if (!prev || score > (prev._score || 0)) byId.set(key, { ...item, _score: score });
+                    } else {
+                        const key = `${item.name || ""}__${item.phone || ""}`;
+                        const prev = byNamePhone.get(key);
+                        if (!prev || score > (prev._score || 0)) byNamePhone.set(key, { ...item, _score: score });
+                    }
+                });
+
+                // ID 있는 것들 먼저, 없는 것들 중 이름+연락처로 추가 (이미 ID로 처리된 것 제외)
+                const idItems = [...byId.values()];
+                const idNames = new Set(idItems.map(i => `${i.name || ""}__${i.phone || ""}`));
+                const extraItems = [...byNamePhone.values()].filter(i => !idNames.has(`${i.name || ""}__${i.phone || ""}`));
+                const result = [...idItems, ...extraItems];
+
+                return result
+                    .map(({ _score, ...item }) => item)
                     .sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
             };
 
