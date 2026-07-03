@@ -701,15 +701,29 @@
                     if (m <= 0) { m += 12; y -= 1; }
                     return `${y}-${String(m).padStart(2, '0')}`;
                 });
-                const chartDataToUse = chartManager === "전체 담당자" ? data : data.filter(d => d.manager === chartManager);
+                // 배민(무료) 제외, 담당자 필터
+                const chartDataToUse = (chartManager === "전체 담당자" ? data : data.filter(d => d.manager === chartManager))
+                    .filter(d => d.payStatus !== '무료');
+
                 return months.map(monthStr => {
                     const mLabel = parseInt(monthStr.split('-')[1], 10) + '월';
+                    // 2026-05 이전 월은 0으로
+                    if (monthStr < '2026-05') return { month: monthStr, label: mLabel, newCount: 0, termCount: 0, netCount: 0 };
+
+                    // 신규: contractStart 기준 (배민 이미 제외됨)
                     const newCount = chartDataToUse.filter(d => d.contractStart && d.contractStart.startsWith(monthStr)).length;
+
+                    // 해지: terminated 탭, history 최신 항목 날짜 기준
                     const termCountData = chartDataToUse.filter(d => {
                         if (d.tab !== 'terminated') return false;
-                        if (d.history && d.history.length > 0 && d.history[0].date) return d.history[0].date.startsWith(monthStr);
+                        // history 중 가장 최근 날짜 찾기
+                        if (d.history && d.history.length > 0) {
+                            const dates = d.history.map(h => h.date || '').filter(Boolean).sort().reverse();
+                            if (dates[0]) return dates[0].startsWith(monthStr);
+                        }
                         return d.contractStart && d.contractStart.startsWith(monthStr);
                     }).length;
+
                     return { month: monthStr, label: mLabel, newCount, termCount: termCountData, netCount: newCount - termCountData };
                 });
             }, [data, chartManager]);
