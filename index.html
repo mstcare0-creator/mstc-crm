@@ -226,6 +226,7 @@
             const [uncollectedMonth, setUncollectedMonth] = useState("");
             const [adminMode, setAdminMode] = useState(false);
             const [logoTapCount, setLogoTapCount] = useState(0);
+            const [staffModal, setStaffModal] = useState(false);
             const [chartModal, setChartModal] = useState(false);
             const [manualChartData, setManualChartData] = useState(() => {
                 try { const s = localStorage.getItem("mstc_chart_v1"); return s ? JSON.parse(s) : {}; } catch { return {}; }
