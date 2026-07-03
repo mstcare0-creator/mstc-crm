@@ -36,7 +36,7 @@
         const TODAY = new Date().toISOString().split('T')[0];
         const CURRENT_MONTH = TODAY.slice(0, 7);
         const CURRENT_MONTH_NUM = parseInt(CURRENT_MONTH.split('-')[1], 10);
-        const STAFF = ["이원식", "강현준"];
+        const DEFAULT_STAFF = ["이원식", "강현준"];
         const CYCLES = ["월1회", "3개월1회", "단기"];
         // 💡 다발이끔 살서제 삭제 완료
         const CHEMICALS_BY_TYPE = { "살균": ["마이크로켐 골드", "키니아 비실드"], "살충": ["롱다운플러스", "맥스포스 셀렉트 이지갤"] };
@@ -226,6 +226,16 @@
             const [uncollectedMonth, setUncollectedMonth] = useState("");
             const [adminMode, setAdminMode] = useState(false);
             const [logoTapCount, setLogoTapCount] = useState(0);
+            const [staffModal, setStaffModal] = useState(false);
+            const [staffList, setStaffList] = useState(() => {
+                try { const s = localStorage.getItem("mstc_staff_v1"); return s ? JSON.parse(s) : DEFAULT_STAFF; } catch { return DEFAULT_STAFF; }
+            });
+            const [newStaffName, setNewStaffName] = useState("");
+
+            const saveStaff = (list) => {
+                setStaffList(list);
+                localStorage.setItem("mstc_staff_v1", JSON.stringify(list));
+            };
 
             const handleLogoTap = () => {
                 const next = logoTapCount + 1;
@@ -825,7 +835,7 @@
                                                     <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="text-sm p-2 border rounded-xl outline-none font-bold bg-white" />
                                                     <select value={reportStaff} onChange={e => setReportStaff(e.target.value)} className="text-sm p-2 border rounded-xl outline-none font-bold bg-white">
                                                         <option value="">전체 대원</option>
-                                                        {STAFF.map(s => <option key={s} value={s}>{s}</option>)}
+                                                        {staffList.map(s => <option key={s} value={s}>{s}</option>)}
                                                     </select>
                                                     <span className="text-xs text-gray-500 font-bold flex-1">총 <span className="text-blue-700">{reportRecords.length}건</span></span>
                                                     <button onClick={exportReport} className="px-4 py-2 bg-green-50 border border-green-300 text-green-800 rounded-xl text-xs font-bold hover:bg-green-100">📥 엑셀 다운로드</button>
@@ -883,7 +893,7 @@
                                             <select value={filterCollection} onChange={e => setFilterCollection(e.target.value)} className="text-xs p-2.5 rounded-xl border bg-white outline-none font-bold text-red-600">
                                                 <option value="">수금 상태 전체</option><option value="미수금">🚨 미수금 업체만</option><option value="수금완료">수금 완료</option>
                                             </select>
-                                            <button onClick={() => alert("대원 관리 시스템 준비중")} className="px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-700 flex items-center gap-1 shadow-sm hover:bg-gray-50">⚙️ 대원 관리</button>
+                                            <button onClick={() => adminMode ? setStaffModal(true) : alert("🔒 관리자 모드에서만 이용 가능합니다.")} className={`px-4 py-2.5 border rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm ${adminMode ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100' : 'bg-white border-gray-300 text-gray-400 cursor-not-allowed'}`}>⚙️ 대원 관리{adminMode ? '' : ' 🔒'}</button>
                                             <button onClick={exportToExcel} className="px-4 py-2.5 bg-green-50 border border-green-300 text-green-800 rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm hover:bg-green-100">📥 엑셀 다운로드 ({currentList.length}건)</button>
                                             {adminMode && (
                                             <label className="px-4 py-2.5 bg-blue-50 border border-blue-300 text-blue-800 rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm hover:bg-blue-100 cursor-pointer">
@@ -1003,7 +1013,7 @@
                                                             <label className="col-span-1"><b>대표자명 (선택)</b><input value={editForm.clientRepName || ""} onChange={e=>setEditForm({...editForm, clientRepName: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="업체 대표 이름" /></label>
                                                             <label className="col-span-1"><b>사업자번호 (선택)</b><input value={editForm.bizNumber || ""} onChange={e=>setEditForm({...editForm, bizNumber: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="숫자만 입력" /></label>
                                                             
-                                                            <label className="col-span-1"><b>담당 대원 *</b><select value={editForm.manager || ""} onChange={e=>setEditForm({...editForm, manager: e.target.value})} className="border p-2 w-full rounded outline-none">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
+                                                            <label className="col-span-1"><b>담당 대원 *</b><select value={editForm.manager || ""} onChange={e=>setEditForm({...editForm, manager: e.target.value})} className="border p-2 w-full rounded outline-none">{staffList.map(s=><option key={s}>{s}</option>)}</select></label>
                                                             <label className="col-span-1"><b>연락처 *</b><input value={editForm.phone || ""} onChange={e=>setEditForm({...editForm, phone: e.target.value})} className="border p-2 w-full rounded outline-none" placeholder="필수 입력" /></label>
                                                             {editForm.tab === "prospect" && (
                                                                 <label className="col-span-2"><b>영업일자</b><input type="date" value={editForm.salesDate || ""} onChange={e=>setEditForm({...editForm, salesDate: e.target.value})} className="border p-2 w-full rounded outline-none" /></label>
@@ -1259,7 +1269,7 @@
                                                         </p>
                                                         <div className="grid grid-cols-2 gap-3">
                                                             <label className="block"><b>방역 일자</b><input type="date" value={historyForm.date} onChange={e => setHistoryForm({...historyForm, date: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white" /></label>
-                                                            <label className="block"><b>출동대원</b><select value={historyForm.author} onChange={e => setHistoryForm({...historyForm, author: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white">{STAFF.map(s => <option key={s}>{s}</option>)}</select></label>
+                                                            <label className="block"><b>출동대원</b><select value={historyForm.author} onChange={e => setHistoryForm({...historyForm, author: e.target.value})} className="w-full mt-1 p-2 border rounded-lg outline-none bg-white">{staffList.map(s => <option key={s}>{s}</option>)}</select></label>
                                                         </div>
                                                         
                                                         <div className="mt-3 bg-gray-50 border p-3 rounded-xl">
@@ -1428,6 +1438,39 @@
                     </div>
 
                     {/* 신규 등록 모달 */}
+                    {/* ── 대원 관리 모달 ── */}
+                    {staffModal && (
+                        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-black text-gray-800">⚙️ 대원 관리</h3>
+                                    <button onClick={() => { setStaffModal(false); setNewStaffName(""); }} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+                                </div>
+                                <div className="space-y-2 mb-4">
+                                    {staffList.map((s, i) => (
+                                        <div key={i} className="flex items-center justify-between bg-gray-50 px-4 py-3 rounded-xl border">
+                                            <span className="font-bold text-gray-800">👤 {s}</span>
+                                            <button onClick={() => {
+                                                if (!confirm(`"${s}" 대원을 삭제하시겠습니까?`)) return;
+                                                saveStaff(staffList.filter((_, idx) => idx !== i));
+                                            }} className="text-red-400 hover:text-red-600 text-xs font-bold px-2 py-1 rounded-lg hover:bg-red-50">삭제</button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2 border-t pt-4">
+                                    <input value={newStaffName} onChange={e => setNewStaffName(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter' && newStaffName.trim()) { saveStaff([...staffList, newStaffName.trim()]); setNewStaffName(""); }}}
+                                        placeholder="새 대원 이름 입력" className="flex-1 p-2.5 border rounded-xl text-sm outline-none" />
+                                    <button onClick={() => {
+                                        if (!newStaffName.trim()) return;
+                                        saveStaff([...staffList, newStaffName.trim()]);
+                                        setNewStaffName("");
+                                    }} className="px-4 py-2.5 bg-[#0B5E4D] text-white rounded-xl text-sm font-bold hover:opacity-90">추가</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* ── 미수금 자동 처리 모달 ── */}
                     {uncollectedModal && (
                         <div className="fixed inset-0 z-50 bg-black/60 flex items-start justify-center p-4 overflow-y-auto">
@@ -1541,7 +1584,7 @@
                                     <label className="col-span-1"><b>대표자명 (선택)</b><input name="clientRepName" className="w-full p-2 border rounded-lg mt-1" placeholder="업체 대표 이름" /></label>
                                     <label className="col-span-1"><b>사업자번호 (선택)</b><input name="bizNumber" className="w-full p-2 border rounded-lg mt-1" placeholder="숫자만 입력" /></label>
                                     </>)}
-                                    <label className="col-span-1"><b>담당 대원 *</b><select name="manager" className="w-full p-2 border rounded-lg mt-1">{STAFF.map(s=><option key={s}>{s}</option>)}</select></label>
+                                    <label className="col-span-1"><b>담당 대원 *</b><select name="manager" className="w-full p-2 border rounded-lg mt-1">{staffList.map(s=><option key={s}>{s}</option>)}</select></label>
                                     {regKind === "prospect" && (
                                     <label className="col-span-1"><b>영업일자 *</b><input type="date" name="salesDate" defaultValue={TODAY} className="w-full p-2 border rounded-lg mt-1" /></label>
                                     )}
