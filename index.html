@@ -218,6 +218,7 @@
             const [currentTab, setCurrentTab] = useState("active");
             const [reportMonth, setReportMonth] = useState(CURRENT_MONTH);
             const [reportStaff, setReportStaff] = useState("");
+            const [reportDay, setReportDay] = useState("");
             const [paysoftModal, setPaySoftModal] = useState(false);
             const [paysoftRows, setPaySoftRows] = useState([]);
             const [paysoftImporting, setPaySoftImporting] = useState(false);
@@ -847,7 +848,10 @@
                                             });
                                         });
                                         allRecords.sort((a, b) => (a.h.date || "").localeCompare(b.h.date || ""));
-                                        const reportRecords = reportStaff ? allRecords.filter(r => r.h.author === reportStaff) : allRecords;
+                                        const staffFiltered = reportStaff ? allRecords.filter(r => r.h.author === reportStaff) : allRecords;
+                                        const reportRecords = reportDay ? staffFiltered.filter(r => r.h.date === reportDay) : staffFiltered;
+                                        // 해당 월의 기록 있는 날짜 목록
+                                        const availableDays = [...new Set(staffFiltered.map(r => r.h.date).filter(Boolean))].sort();
 
                                         // 날짜별 그룹핑
                                         const groupedByDay = {};
@@ -875,7 +879,15 @@
                                         return (
                                             <div key="report-view">
                                                 <div className="flex flex-wrap items-center gap-2 mb-4">
-                                                    <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="text-sm p-2 border rounded-xl outline-none font-bold bg-white" />
+                                                    <input type="month" value={reportMonth} onChange={e => { setReportMonth(e.target.value); setReportDay(""); }} className="text-sm p-2 border rounded-xl outline-none font-bold bg-white" />
+                                                    <select value={reportDay} onChange={e => setReportDay(e.target.value)} className="text-sm p-2 border rounded-xl outline-none font-bold bg-white">
+                                                        <option value="">전체 날짜</option>
+                                                        {availableDays.map(d => {
+                                                            const dObj = new Date(d);
+                                                            const dayName = ['일','월','화','수','목','금','토'][dObj.getDay()];
+                                                            return <option key={d} value={d}>{d} ({dayName})</option>;
+                                                        })}
+                                                    </select>
                                                     <select value={reportStaff} onChange={e => setReportStaff(e.target.value)} className="text-sm p-2 border rounded-xl outline-none font-bold bg-white">
                                                         <option value="">전체 대원</option>
                                                         {staffList.map(s => <option key={s} value={s}>{s}</option>)}
