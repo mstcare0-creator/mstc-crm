@@ -271,6 +271,7 @@
             const [filterCollection, setFilterCollection] = useState("");
             const [filterCompletion, setFilterCompletion] = useState(""); 
             const [chartManager, setChartManager] = useState("전체 담당자");
+            const [monthLookup, setMonthLookup] = useState(CURRENT_MONTH);
             
             const [selectedItem, setSelectedItem] = useState(null);
             const [detailTab, setDetailTab] = useState("info");
@@ -746,6 +747,22 @@
 
             const maxChartVal = Math.max(1, ...chartStats.map(s => Math.max(s.newCount, s.termCount, Math.abs(s.netCount))));
 
+            // 🔍 월별 신규 등록 업체 조회용 (방역시작일 기준, 유료만)
+            const monthLookupOptions = useMemo(() => {
+                const set = new Set();
+                data.forEach(d => { if (d.contractStart) set.add(String(d.contractStart).slice(0, 7)); });
+                chartStats.forEach(c => set.add(c.month));
+                set.add(CURRENT_MONTH);
+                set.add(monthLookup);
+                return [...set].sort().reverse();
+            }, [data, chartStats, monthLookup]);
+
+            const monthLookupList = useMemo(() => {
+                return enrichedData
+                    .filter(d => d.payStatus === '유료' && d.contractStart && String(d.contractStart).startsWith(monthLookup))
+                    .sort((a, b) => String(a.contractStart).localeCompare(String(b.contractStart)));
+            }, [enrichedData, monthLookup]);
+
             if (loading) return <div className="flex items-center justify-center min-h-screen font-bold text-emerald-800">데이터 로드 중... 잠시만 기다려주세요!</div>;
 
             const availableHistoryYears = selectedItem && selectedItem.history ? [...new Set(selectedItem.history.map(h => h.date ? h.date.split('-')[0] : ''))].filter(Boolean).sort().reverse() : [];
@@ -801,7 +818,7 @@
                         <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm relative overflow-hidden">
                             <div className="flex justify-between items-center mb-6">
                                 <div className="flex items-center gap-3">
-                                    <h3 className="text-sm font-bold text-gray-800">📊 월별 순증 추이 (신규 및 해지)</h3>
+                                    <h3 className="text-sm font-bold text-gray-800">📊 월별 순증 추이 (신규 및 해지) <span className="text-[10px] text-gray-400 font-normal">· 막대 클릭 시 아래 목록에 표시</span></h3>
                                     <select value={chartManager} onChange={e => setChartManager(e.target.value)} className="text-xs p-1.5 border rounded-lg bg-gray-50 text-gray-600 font-bold outline-none cursor-pointer hover:bg-gray-100 transition-all">
                                         <option>전체 담당자</option>
                                         {staffList.map(s => <option key={s}>{s}</option>)}
@@ -814,16 +831,47 @@
                             </div>
                             <div className="h-32 flex items-end justify-around px-4 border-b border-gray-200 relative pb-2">
                                 {chartStats.map(chart => (
-                                    <div key={chart.month} className="flex flex-col items-center gap-2 relative z-10 w-16 group">
+                                    <div key={chart.month} onClick={() => setMonthLookup(chart.month)}
+                                        className={`flex flex-col items-center gap-2 relative z-10 w-16 group cursor-pointer rounded-lg py-1 transition-colors ${chart.month === monthLookup ? 'bg-[#E3F2EC]' : 'hover:bg-gray-50'}`}>
                                         <div className="flex items-end gap-1 h-28 w-full justify-center relative">
                                             <div className="bg-[#0B5E4D] rounded-t-sm shadow-sm transition-all duration-500 w-3.5" style={{ height: `${(chart.newCount / maxChartVal) * 100}%`, minHeight: chart.newCount > 0 ? '4px' : '0' }}></div>
                                             <div className="bg-rose-700 rounded-t-sm shadow-sm transition-all duration-500 w-3.5" style={{ height: `${(chart.termCount / maxChartVal) * 100}%`, minHeight: chart.termCount > 0 ? '4px' : '0' }}></div>
                                             <div className="absolute -top-10 bg-gray-800 text-white text-[11px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20 shadow-lg font-bold">순증 {chart.netCount > 0 ? `+${chart.netCount}` : chart.netCount}건</div>
                                         </div>
-                                        <span className="text-[10px] text-gray-400 font-bold">{chart.label}</span>
+                                        <span className={`text-[10px] font-bold ${chart.month === monthLookup ? 'text-[#0B5E4D]' : 'text-gray-400'}`}>{chart.label}</span>
                                     </div>
                                 ))}
                             </div>
+                        </div>
+
+                        <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm">
+                            <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+                                <h3 className="text-sm font-bold text-gray-800">🔍 월별 신규 등록 업체 조회 <span className="text-[11px] text-gray-400 font-normal">(방역시작일 · 유료 기준)</span></h3>
+                                <select value={monthLookup} onChange={e => setMonthLookup(e.target.value)} className="text-xs p-2 border rounded-lg bg-gray-50 text-gray-700 font-bold outline-none cursor-pointer">
+                                    {monthLookupOptions.map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                            </div>
+                            <p className="text-xs text-gray-500 font-bold mb-3">총 {monthLookupList.length}건</p>
+                            {monthLookupList.length === 0 ? (
+                                <p className="text-xs text-gray-400 text-center py-6">해당 월에 등록된 유료 업체가 없습니다.</p>
+                            ) : (
+                                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                                    {monthLookupList.map(item => (
+                                        <div key={item.id || `${item.name}_${item.contractStart}`}
+                                            onClick={() => { setSelectedItem(item); setCurrentTab(item.tab); setDetailTab('info'); }}
+                                            className="flex justify-between items-center p-3 border rounded-xl hover:bg-[#F8FAF6] cursor-pointer transition-all">
+                                            <div>
+                                                <p className="text-sm font-bold text-gray-800">{item.name}</p>
+                                                <p className="text-[11px] text-gray-400 mt-0.5">{item.gu} {item.dong} · {item.manager || '담당자 미지정'}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs font-mono font-bold text-[#0B5E4D]">{item.contractStart}</p>
+                                                <p className="text-[11px] text-gray-500 mt-0.5">₩{Number(String(item.fee).replace(/,/g, '') || 0).toLocaleString()}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex flex-col lg:flex-row gap-6">
