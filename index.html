@@ -67,6 +67,19 @@
             const full = normalizeDateFull(str);
             return full && full.length >= 7 ? full.slice(0, 7) : null;
         }
+        // ⏰ "8:30", "오전 11:00", "23:05:00" 등 뒤섞인 시간 표기를 분 단위 숫자로 변환 (정렬용)
+        function timeToMinutes(str) {
+            if (!str) return 99999;
+            const s = String(str).trim();
+            const match = s.match(/(\d{1,2}):(\d{2})/);
+            if (!match) return 99999;
+            let h = parseInt(match[1], 10);
+            const m = parseInt(match[2], 10);
+            if (isNaN(h) || isNaN(m)) return 99999;
+            if (/오후|PM/i.test(s) && h < 12) h += 12;
+            if (/오전|AM/i.test(s) && h === 12) h = 0;
+            return h * 60 + m;
+        }
 
         function App() {
             const [data, setData] = useState([]);
@@ -877,7 +890,7 @@
                                             });
                                         });
                                         const filterPrefix = reportDate || reportMonth;
-                                        allRecords.sort((a, b) => (a.h.date || "").localeCompare(b.h.date || ""));
+                                        allRecords.sort((a, b) => (a.h.date || "").localeCompare(b.h.date || "") || (timeToMinutes(a.h.time) - timeToMinutes(b.h.time)));
                                         const staffFiltered = reportStaff ? allRecords.filter(r => r.h.author === reportStaff) : allRecords;
                                         const reportRecords = staffFiltered.filter(r => (r.h.date || "").startsWith(filterPrefix));
                                         const availableDays = [...new Set(staffFiltered.filter(r => (r.h.date||"").startsWith(reportMonth)).map(r => r.h.date).filter(Boolean))].sort();
@@ -888,6 +901,9 @@
                                             const d = r.h.date || '날짜없음';
                                             if (!groupedByDay[d]) groupedByDay[d] = [];
                                             groupedByDay[d].push(r);
+                                        });
+                                        Object.keys(groupedByDay).forEach(d => {
+                                            groupedByDay[d].sort((a, b) => timeToMinutes(a.h.time) - timeToMinutes(b.h.time));
                                         });
                                         const groupedDays = Object.keys(groupedByDay).sort();
                                         const dayNames = ['일','월','화','수','목','금','토'];
