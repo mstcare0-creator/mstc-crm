@@ -1115,7 +1115,7 @@
                                         )}
                                         {selectedItem.adminMemo && (
                                             <div className="mt-2 text-[11px] bg-amber-50 text-amber-900 p-2.5 rounded-xl border border-amber-300 break-words whitespace-pre-wrap shadow-sm">
-                                                <p><span className="font-bold text-amber-700">🚨 이슈사항 (관리자 등록):</span> {selectedItem.adminMemo}</p>
+                                                <p><span className="font-bold text-amber-700">🚨 이슈사항:</span> {selectedItem.adminMemo}</p>
                                             </div>
                                         )}
                                     </div>
@@ -1186,9 +1186,7 @@
                                                                 <label className="text-rose-700 font-bold col-span-2">업체 기본 미수금액 (원) <input type="tel" inputMode="numeric" pattern="[0-9]*" value={editForm.uncollectedAmount || ""} onChange={e=>setEditForm({...editForm, uncollectedAmount: e.target.value.replace(/[^0-9]/g, "")})} className="border border-rose-300 p-2 w-full rounded outline-none bg-rose-50" placeholder="숫자만 입력" /></label>
                                                             )}
                                                             <label className="col-span-2 mt-2">기타 (추가 정보) <textarea value={editForm.etcInfo || ""} onChange={e=>setEditForm({...editForm, etcInfo: e.target.value})} className="border p-2 w-full rounded outline-none h-16 mt-1" placeholder="특이사항 등 자유롭게 입력"></textarea></label>
-                                                            {adminMode && (
-                                                                <label className="col-span-2 mt-2">🚨 이슈사항 (관리자 전용 — 이슈 업체 집계에 사용) <textarea value={editForm.adminMemo || ""} onChange={e=>setEditForm({...editForm, adminMemo: e.target.value})} className="border border-amber-300 bg-amber-50 p-2 w-full rounded outline-none h-16 mt-1" placeholder="관리자만 남기는 이슈사항 (이 항목만 이슈 업체 집계에 반영됩니다)"></textarea></label>
-                                                            )}
+                                                            <label className="col-span-2 mt-2">🚨 이슈사항 (이슈 업체 집계에 사용) <textarea value={editForm.adminMemo || ""} onChange={e=>setEditForm({...editForm, adminMemo: e.target.value})} className="border border-amber-300 bg-amber-50 p-2 w-full rounded outline-none h-16 mt-1" placeholder="열쇠 분실, 민원, 계약 관련 이슈 등 — 이 항목만 이슈 업체 집계에 반영됩니다"></textarea></label>
                                                         </div>
                                                         <div className="col-span-2 flex justify-between items-center mt-2 border-t pt-3">
                                                             <span className="text-red-500 font-bold text-xs">{editError}</span>
