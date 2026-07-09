@@ -828,29 +828,31 @@
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+                        <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 -mx-1 px-1 md:mx-0 md:px-0 md:grid md:grid-cols-5 md:overflow-visible md:pb-0 [&::-webkit-scrollbar]:hidden">
+                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 shrink-0 w-[78%] sm:w-[45%] snap-start md:w-auto md:shrink">
                                 <div className="p-4 bg-[#E3F2EC] rounded-xl text-[#0B5E4D] text-2xl">👤</div>
                                 <div><p className="text-xs text-gray-400 font-bold mb-0.5">운영중 거래처</p><p className="text-2xl font-black text-gray-800 leading-none">{activeData.length}</p><p className="text-[11px] text-gray-500 mt-1.5">이원식 {leeCount} · 강현준 {kangCount}</p></div>
                             </div>
-                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 shrink-0 w-[78%] sm:w-[45%] snap-start md:w-auto md:shrink">
                                 <div className="p-4 bg-rose-50 rounded-xl text-rose-700 text-2xl">📅</div>
                                 <div><p className="text-xs text-gray-400 font-bold mb-0.5">이번 달 방역 현황</p><p className="text-2xl font-black text-gray-800 leading-none">{activeData.length}</p><p className="text-[11px] text-gray-500 font-bold mt-1.5">완료 {completedThisMonth}건 <span className="text-rose-600">· 지연 {delayedThisMonth}건</span></p></div>
                             </div>
-                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 shrink-0 w-[78%] sm:w-[45%] snap-start md:w-auto md:shrink">
                                 <div className="p-4 bg-gray-50 rounded-xl text-gray-700 text-2xl">📉</div>
                                 <div><p className="text-xs text-gray-400 font-bold mb-0.5">총 누적 해지율</p><p className="text-2xl font-black text-gray-800 leading-none">{cancelRate}%</p><p className="text-[11px] text-gray-500 mt-1.5">해지 {termCount}건</p></div>
                             </div>
-                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+                            <div onClick={() => { setCurrentTab('active'); setFilterCollection(v => v === '미수금' ? '' : '미수금'); }}
+                                className={`p-5 rounded-2xl border shadow-sm flex items-center gap-4 cursor-pointer transition-all shrink-0 w-[78%] sm:w-[45%] snap-start md:w-auto md:shrink ${filterCollection === '미수금' ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-300' : 'bg-white border-gray-100 hover:border-rose-300'}`}>
                                 <div className="p-4 bg-rose-50 rounded-xl text-rose-700 text-2xl">💰</div>
-                                <div><p className="text-xs text-gray-400 font-bold mb-0.5">총 미수금 현황</p><p className="text-xl font-black text-red-600 leading-none">₩{totalUncollected.toLocaleString()}</p><p className="text-[11px] text-gray-500 mt-1.5">현재 미납 {uncollectedClientsCount}곳</p></div>
+                                <div><p className="text-xs text-gray-400 font-bold mb-0.5">총 미수금 현황</p><p className="text-xl font-black text-red-600 leading-none">₩{totalUncollected.toLocaleString()}</p><p className="text-[11px] mt-1.5"><span className="text-gray-500">현재 미납 {uncollectedClientsCount}곳</span> <span className="text-rose-600 font-bold">· {filterCollection === '미수금' ? '클릭하여 해제' : '클릭하여 보기'}</span></p></div>
                             </div>
                             <div onClick={() => { setCurrentTab('active'); setFilterIssueOnly(v => !v); }}
-                                className={`p-5 rounded-2xl border shadow-sm flex items-center gap-4 cursor-pointer transition-all ${filterIssueOnly ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-300' : 'bg-white border-gray-100 hover:border-amber-300'}`}>
+                                className={`p-5 rounded-2xl border shadow-sm flex items-center gap-4 cursor-pointer transition-all shrink-0 w-[78%] sm:w-[45%] snap-start md:w-auto md:shrink ${filterIssueOnly ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-300' : 'bg-white border-gray-100 hover:border-amber-300'}`}>
                                 <div className="p-4 bg-amber-50 rounded-xl text-amber-600 text-2xl">💡</div>
                                 <div><p className="text-xs text-gray-400 font-bold mb-0.5">이슈 업체</p><p className="text-2xl font-black text-gray-800 leading-none">{issueCount}</p><p className="text-[11px] text-amber-600 font-bold mt-1.5">{filterIssueOnly ? '클릭하여 해제' : '클릭하여 보기'}</p></div>
                             </div>
                         </div>
+                        <p className="text-[11px] text-gray-400 -mt-1 md:hidden">← 옆으로 밀어서 더 보기 →</p>
 
                         <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm relative overflow-hidden">
                             <div className="flex justify-between items-center mb-6">
