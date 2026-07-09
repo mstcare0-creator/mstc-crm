@@ -561,9 +561,9 @@
             };
 
             const convertToFailed = () => {
-                if(!confirm("영업 실패 처리하시겠습니까? (해지 거래처 탭으로 이동합니다)")) return;
-                const updated = { ...selectedItem, tab: 'terminated', payStatus: '영업실패', terminatedDate: TODAY };
-                updateDataAndSync(data.map(item => item.id === updated.id ? updated : item)); setSelectedItem(updated); setCurrentTab('terminated');
+                if(!confirm("영업 실패 처리하시겠습니까? (영업처 탭에 실패로 표시됩니다)")) return;
+                const updated = { ...selectedItem, tab: 'prospect', payStatus: '영업실패', salesFailDate: TODAY };
+                updateDataAndSync(data.map(item => item.id === updated.id ? updated : item)); setSelectedItem(updated); setCurrentTab('prospect');
             };
 
             const handleAddHistory = (e) => {
