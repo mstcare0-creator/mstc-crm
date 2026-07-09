@@ -675,7 +675,7 @@
                     const matchPayStatus = !filterPayStatus || String(r.payStatus || "").trim() === filterPayStatus;
                     const matchCollection = !filterCollection || (filterCollection === '미수금' ? r.computedDebt > 0 : r.computedDebt === 0);
                     const matchRegMonth = !filterRegMonth || normalizeMonth(r.contractStart) === filterRegMonth;
-                    const matchIssue = !filterIssueOnly || (r.etcInfo && String(r.etcInfo).trim() !== '') || (r.adminMemo && String(r.adminMemo).trim() !== '');
+                    const matchIssue = !filterIssueOnly || (r.adminMemo && String(r.adminMemo).trim() !== '');
                     const matchUnchecked = !filterUncheckedOnly || (r.payStatus !== '무료' && !(r.paymentHistory || []).some(p => p.month === CURRENT_MONTH));
                     const isCompletedThisMonth = r.history && r.history.some(h => h.type === '방역' && h.date && h.date.startsWith(CURRENT_MONTH));
                     const matchCompletion = !filterCompletion || (filterCompletion === 'completed' ? isCompletedThisMonth : !isCompletedThisMonth);
@@ -734,7 +734,7 @@
             };
 
             const activeData = enrichedData.filter(d => d.tab === 'active');
-            const issueCount = activeData.filter(d => (d.etcInfo && String(d.etcInfo).trim() !== '') || (d.adminMemo && String(d.adminMemo).trim() !== '')).length;
+            const issueCount = activeData.filter(d => d.adminMemo && String(d.adminMemo).trim() !== '').length;
             const uncheckedThisMonthCount = activeData.filter(d => d.payStatus !== '무료' && !(d.paymentHistory || []).some(p => p.month === CURRENT_MONTH)).length;
             const leeCount = activeData.filter(d => d.manager === '이원식').length;
             const kangCount = activeData.filter(d => d.manager === '강현준').length;
@@ -1064,7 +1064,7 @@
                                                             <div className="mt-2 space-y-1 w-full max-w-[250px]">
                                                                 {item.keyInfo && <p className="text-[11px] text-blue-700 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 truncate shadow-sm">🔑 {item.keyInfo}</p>}
                                                                 {item.etcInfo && <p className="text-[11px] text-gray-600 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200 truncate shadow-sm">💡 {item.etcInfo}</p>}
-                                                                {item.adminMemo && <p className="text-[11px] text-amber-800 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 truncate shadow-sm">🔒 {item.adminMemo}</p>}
+                                                                {item.adminMemo && <p className="text-[11px] text-amber-800 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 truncate shadow-sm">🚨 {item.adminMemo}</p>}
                                                             </div>
                                                         )}
                                                     </div>
@@ -1115,7 +1115,7 @@
                                         )}
                                         {selectedItem.adminMemo && (
                                             <div className="mt-2 text-[11px] bg-amber-50 text-amber-900 p-2.5 rounded-xl border border-amber-300 break-words whitespace-pre-wrap shadow-sm">
-                                                <p><span className="font-bold text-amber-700">🔒 관리자 메모:</span> {selectedItem.adminMemo}</p>
+                                                <p><span className="font-bold text-amber-700">🚨 이슈사항 (관리자 등록):</span> {selectedItem.adminMemo}</p>
                                             </div>
                                         )}
                                     </div>
@@ -1187,7 +1187,7 @@
                                                             )}
                                                             <label className="col-span-2 mt-2">기타 (추가 정보) <textarea value={editForm.etcInfo || ""} onChange={e=>setEditForm({...editForm, etcInfo: e.target.value})} className="border p-2 w-full rounded outline-none h-16 mt-1" placeholder="특이사항 등 자유롭게 입력"></textarea></label>
                                                             {adminMode && (
-                                                                <label className="col-span-2 mt-2">🔒 관리자 메모 (사무실 전용) <textarea value={editForm.adminMemo || ""} onChange={e=>setEditForm({...editForm, adminMemo: e.target.value})} className="border border-amber-300 bg-amber-50 p-2 w-full rounded outline-none h-16 mt-1" placeholder="관리자만 남기는 별도 메모"></textarea></label>
+                                                                <label className="col-span-2 mt-2">🚨 이슈사항 (관리자 전용 — 이슈 업체 집계에 사용) <textarea value={editForm.adminMemo || ""} onChange={e=>setEditForm({...editForm, adminMemo: e.target.value})} className="border border-amber-300 bg-amber-50 p-2 w-full rounded outline-none h-16 mt-1" placeholder="관리자만 남기는 이슈사항 (이 항목만 이슈 업체 집계에 반영됩니다)"></textarea></label>
                                                             )}
                                                         </div>
                                                         <div className="col-span-2 flex justify-between items-center mt-2 border-t pt-3">
