@@ -67,6 +67,21 @@
             const full = normalizeDateFull(str);
             return full && full.length >= 7 ? full.slice(0, 7) : null;
         }
+        // 🛟 객체 key 순서와 무관하게 항상 같은 문자열이 나오도록 정렬해서 비교하기 위한 안전 stringify
+        function stableStringify(obj) {
+            if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
+            if (Array.isArray(obj)) return '[' + obj.map(stableStringify).join(',') + ']';
+            const keys = Object.keys(obj).sort();
+            return '{' + keys.map(k => JSON.stringify(k) + ':' + stableStringify(obj[k])).join(',') + '}';
+        }
+        // 🛟 "다른 기기에서 데이터가 바뀌었는지" 판단용 지문 — 값 포맷(문자/숫자, 공백 등)이 서버 왕복하며
+        // 살짝 달라져도 오탐이 안 나도록, 업체 수 + 각 업체의 기록/수금 건수만 가볍게 비교한다.
+        function dataFingerprint(arr) {
+            return (arr || [])
+                .map(item => `${item.id}:${(item.history || []).length}:${(item.paymentHistory || []).length}`)
+                .sort()
+                .join('|');
+        }
         // ⏰ "8:30", "오전 11:00", "23:05:00" 등 뒤섞인 시간 표기를 분 단위 숫자로 변환 (정렬용)
         function timeToMinutes(str) {
             if (!str) return 99999;
@@ -122,6 +137,7 @@
             let dataFetched = false;
             // 🛟 마지막으로 확인한 "서버 데이터" 스냅샷 — 다른 기기/탭에서 그 사이에 변경했는지 감지용
             const lastKnownServerRef = useRef(null);
+            const lastSaveTimeRef = useRef(0);
 
             useEffect(() => {
                 if (dataFetched) return;
@@ -133,7 +149,7 @@
                             const clean = dedupeAndSort(fetchedData);
                             setData(clean);
                             localStorage.setItem("mstc_crm_data_v50", JSON.stringify(clean));
-                            lastKnownServerRef.current = JSON.stringify(clean);
+                            lastKnownServerRef.current = dataFingerprint(clean);
                         } else {
                             const local = localStorage.getItem("mstc_crm_data_v50");
                             if(local) setData(dedupeAndSort(JSON.parse(local)));
@@ -152,12 +168,14 @@
 
                 // 🛟 저장 직전, 다른 기기/탭에서 방금 데이터를 바꿔놓지 않았는지 서버에서 한번 더 확인
                 // (감지되면 덮어쓰지 않고 중단 — 조용히 사라지는 데이터를 막기 위한 안전장치)
-                if (lastKnownServerRef.current) {
+                // 단, 방금 우리가 직접 저장한 지 얼마 안 됐다면(구글시트 반영 지연 중일 수 있음) 이 확인은 건너뜀
+                const justSavedRecently = Date.now() - lastSaveTimeRef.current < 4000;
+                if (lastKnownServerRef.current && !justSavedRecently) {
                     try {
                         const freshRes = await fetch(GOOGLE_SCRIPT_URL);
                         const freshData = await freshRes.json();
                         if (Array.isArray(freshData) && freshData.length > 0) {
-                            const freshStr = JSON.stringify(dedupeAndSort(freshData));
+                            const freshStr = dataFingerprint(dedupeAndSort(freshData));
                             if (freshStr !== lastKnownServerRef.current) {
                                 alert("⚠️ 다른 기기(또는 다른 탭)에서 방금 데이터가 변경된 것 같습니다.\n지금 저장하면 그 변경 내용이 사라질 수 있어서, 저장을 중단했습니다.\n\n화면을 새로고침(🔄 최신 데이터 불러오기)해서 최신 데이터를 다시 받아온 후, 방금 하신 작업을 다시 시도해주세요.");
                                 return false;
@@ -170,7 +188,8 @@
 
                 setData(clean);
                 localStorage.setItem("mstc_crm_data_v50", JSON.stringify(clean));
-                lastKnownServerRef.current = JSON.stringify(clean);
+                lastKnownServerRef.current = dataFingerprint(clean);
+                lastSaveTimeRef.current = Date.now();
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
@@ -724,11 +743,17 @@
                 }
 
                 // 정렬 탭: 가나다순 / 최근 등록순 / 오래된 등록순 (방역시작일 기준)
-                if (sortOrder === 'newest') {
-                    return [...filtered].sort((a, b) => normalizeDateFull(b.contractStart).localeCompare(normalizeDateFull(a.contractStart)) || (a.name || "").localeCompare(b.name || "", "ko"));
-                }
-                if (sortOrder === 'oldest') {
-                    return [...filtered].sort((a, b) => normalizeDateFull(a.contractStart).localeCompare(normalizeDateFull(b.contractStart)) || (a.name || "").localeCompare(b.name || "", "ko"));
+                // 방역시작일이 비어있는 업체는 어느 정렬이든 항상 맨 뒤로 보냄
+                if (sortOrder === 'newest' || sortOrder === 'oldest') {
+                    return [...filtered].sort((a, b) => {
+                        const da = normalizeDateFull(a.contractStart);
+                        const db = normalizeDateFull(b.contractStart);
+                        if (!da && !db) return (a.name || "").localeCompare(b.name || "", "ko");
+                        if (!da) return 1;
+                        if (!db) return -1;
+                        const cmp = sortOrder === 'newest' ? db.localeCompare(da) : da.localeCompare(db);
+                        return cmp || (a.name || "").localeCompare(b.name || "", "ko");
+                    });
                 }
                 // 기본: 상호명 가나다 순 고정 정렬 (구글 시트 반환 순서와 무관)
                 return [...filtered].sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
