@@ -163,29 +163,11 @@
                     });
             }, []);
 
-            const updateDataAndSync = async (newData) => {
+            const updateDataAndSync = (newData) => {
                 const clean = dedupeAndSort(newData);
+                const prevKnownFingerprint = lastKnownServerRef.current;
 
-                // 🛟 저장 직전, 다른 기기/탭에서 방금 데이터를 바꿔놓지 않았는지 서버에서 한번 더 확인
-                // (감지되면 덮어쓰지 않고 중단 — 조용히 사라지는 데이터를 막기 위한 안전장치)
-                // 단, 방금 우리가 직접 저장한 지 얼마 안 됐다면(구글시트 반영 지연 중일 수 있음) 이 확인은 건너뜀
-                const justSavedRecently = Date.now() - lastSaveTimeRef.current < 4000;
-                if (lastKnownServerRef.current && !justSavedRecently) {
-                    try {
-                        const freshRes = await fetch(GOOGLE_SCRIPT_URL);
-                        const freshData = await freshRes.json();
-                        if (Array.isArray(freshData) && freshData.length > 0) {
-                            const freshStr = dataFingerprint(dedupeAndSort(freshData));
-                            if (freshStr !== lastKnownServerRef.current) {
-                                alert("⚠️ 다른 기기(또는 다른 탭)에서 방금 데이터가 변경된 것 같습니다.\n지금 저장하면 그 변경 내용이 사라질 수 있어서, 저장을 중단했습니다.\n\n화면을 새로고침(🔄 최신 데이터 불러오기)해서 최신 데이터를 다시 받아온 후, 방금 하신 작업을 다시 시도해주세요.");
-                                return false;
-                            }
-                        }
-                    } catch (e) {
-                        // 확인용 fetch가 실패해도(오프라인 등) 저장 자체는 계속 진행 — 기존 동작 유지
-                    }
-                }
-
+                // ⚡ 저장은 즉시 진행 (화면 지연 없음)
                 setData(clean);
                 localStorage.setItem("mstc_crm_data_v50", JSON.stringify(clean));
                 lastKnownServerRef.current = dataFingerprint(clean);
@@ -195,6 +177,24 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ data: clean })
                 }).catch(err => console.log("전송 지연"));
+
+                // 🛟 저장은 막지 않되, 백그라운드에서 "혹시 저장 직전에 다른 기기가 먼저 바꿔놓은 게 있었는지"
+                // 조용히 확인해서, 그런 경우에만 뒤늦게 알려줌 (조용히 사라지는 걸 완전히 막을 순 없어도 최소한 알아채게)
+                if (prevKnownFingerprint) {
+                    fetch(GOOGLE_SCRIPT_URL)
+                        .then(res => res.json())
+                        .then(freshData => {
+                            if (Array.isArray(freshData) && freshData.length > 0) {
+                                const freshFingerprint = dataFingerprint(dedupeAndSort(freshData));
+                                // 우리가 방금 저장을 반영하기 전, 서버가 우리가 알던 상태와 이미 달랐다면 = 다른 기기가 먼저 바꿈
+                                if (freshFingerprint !== prevKnownFingerprint && freshFingerprint !== lastKnownServerRef.current) {
+                                    alert("⚠️ 방금 저장 직전에 다른 기기(또는 다른 탭)에서 데이터가 변경된 흔적이 있습니다.\n혹시 그 변경 내용이 덮어써졌을 수 있으니, 화면을 새로고침(🔄 최신 데이터 불러오기)해서 데이터가 맞는지 확인해주세요.");
+                                }
+                            }
+                        })
+                        .catch(() => {});
+                }
+
                 return true;
             };
 
@@ -886,7 +886,13 @@
                                 <div className="text-sm text-gray-400 font-mono font-bold tracking-wider">{TODAY.replace(/-/g, '.')} 기준</div>
                                 <div className="flex gap-2">
                                     {adminMode && <button onClick={handleBatchInsert} className="px-3 py-1.5 border border-blue-600 text-blue-700 bg-blue-50 rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-sm hover:bg-blue-600 hover:text-white transition-all">🪄 과거기록 일괄 자동채우기</button>}
-                                    <button onClick={() => window.location.reload()} className="px-3 py-1.5 border border-[#0B5E4D] text-[#0B5E4D] rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-sm hover:bg-[#0B5E4D] hover:text-white transition-all">🔄 최신 데이터 불러오기</button>
+                                    <button onClick={() => {
+                                        const secsSinceSave = (Date.now() - lastSaveTimeRef.current) / 1000;
+                                        if (lastSaveTimeRef.current && secsSinceSave < 5) {
+                                            if (!confirm(`⏳ 방금 저장한 내용(${Math.ceil(5 - secsSinceSave)}초 전)이 서버에 아직 반영 중일 수 있어요.\n지금 새로고침하면 그 내용이 안 보일 수 있습니다.\n\n그래도 새로고침하시겠어요? (조금 기다렸다가 누르시는 걸 권장해요)`)) return;
+                                        }
+                                        window.location.reload();
+                                    }} className="px-3 py-1.5 border border-[#0B5E4D] text-[#0B5E4D] rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-sm hover:bg-[#0B5E4D] hover:text-white transition-all">🔄 최신 데이터 불러오기</button>
                                 </div>
                             </div>
                         </div>
