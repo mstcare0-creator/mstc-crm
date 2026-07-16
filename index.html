@@ -180,19 +180,25 @@
 
                 // 🛟 저장은 막지 않되, 백그라운드에서 "혹시 저장 직전에 다른 기기가 먼저 바꿔놓은 게 있었는지"
                 // 조용히 확인해서, 그런 경우에만 뒤늦게 알려줌 (조용히 사라지는 걸 완전히 막을 순 없어도 최소한 알아채게)
+                // ⏳ 방금 보낸 저장 요청이 서버(구글시트)에 실제로 반영될 시간을 준 뒤에 확인 (너무 빨리 확인하면 우리 자신의 저장을
+                // "다른 기기가 바꾼 것"으로 오판할 수 있음)
                 if (prevKnownFingerprint) {
-                    fetch(GOOGLE_SCRIPT_URL)
-                        .then(res => res.json())
-                        .then(freshData => {
-                            if (Array.isArray(freshData) && freshData.length > 0) {
-                                const freshFingerprint = dataFingerprint(dedupeAndSort(freshData));
-                                // 우리가 방금 저장을 반영하기 전, 서버가 우리가 알던 상태와 이미 달랐다면 = 다른 기기가 먼저 바꿈
-                                if (freshFingerprint !== prevKnownFingerprint && freshFingerprint !== lastKnownServerRef.current) {
-                                    alert("⚠️ 방금 저장 직전에 다른 기기(또는 다른 탭)에서 데이터가 변경된 흔적이 있습니다.\n혹시 그 변경 내용이 덮어써졌을 수 있으니, 화면을 새로고침(🔄 최신 데이터 불러오기)해서 데이터가 맞는지 확인해주세요.");
+                    setTimeout(() => {
+                        fetch(GOOGLE_SCRIPT_URL)
+                            .then(res => res.json())
+                            .then(freshData => {
+                                if (Array.isArray(freshData) && freshData.length > 0) {
+                                    const freshFingerprint = dataFingerprint(dedupeAndSort(freshData));
+                                    // 우리가 방금 저장한 내용도 아니고, 저장 전 상태도 아니면 = 다른 기기가 그 사이에 진짜로 바꿈
+                                    // (lastKnownServerRef.current는 그 사이 우리가 연달아 저장했으면 계속 최신으로 갱신되므로,
+                                    //  같은 사람이 짧은 시간에 여러 번 저장해도 오탐이 안 남)
+                                    if (freshFingerprint !== prevKnownFingerprint && freshFingerprint !== lastKnownServerRef.current) {
+                                        alert("⚠️ 방금 저장 직전에 다른 기기(또는 다른 탭)에서 데이터가 변경된 흔적이 있습니다.\n혹시 그 변경 내용이 덮어써졌을 수 있으니, 화면을 새로고침(🔄 최신 데이터 불러오기)해서 데이터가 맞는지 확인해주세요.");
+                                    }
                                 }
-                            }
-                        })
-                        .catch(() => {});
+                            })
+                            .catch(() => {});
+                    }, 6000);
                 }
 
                 return true;
