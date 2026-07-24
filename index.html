@@ -356,8 +356,7 @@
             const [filterRegMonth, setFilterRegMonth] = useState("");
             const [filterIssueOnly, setFilterIssueOnly] = useState(false);
             const [filterUncheckedOnly, setFilterUncheckedOnly] = useState(false);
-            const [filterFeeMin, setFilterFeeMin] = useState("");
-            const [filterFeeMax, setFilterFeeMax] = useState("");
+            const [filterFee, setFilterFee] = useState("");
             const [sortOrder, setSortOrder] = useState("name");
             
             const [selectedItem, setSelectedItem] = useState(null);
@@ -737,11 +736,10 @@
                     const matchIssue = !filterIssueOnly || (r.adminMemo && String(r.adminMemo).trim() !== '');
                     const matchUnchecked = !filterUncheckedOnly || (r.payStatus !== '무료' && !(r.paymentHistory || []).some(p => p.month === CURRENT_MONTH));
                     const feeNum = Number(String(r.fee || "0").replace(/[^0-9.-]/g, "")) || 0;
-                    const matchFeeMin = !adminMode || !filterFeeMin || feeNum >= Number(filterFeeMin);
-                    const matchFeeMax = !adminMode || !filterFeeMax || feeNum <= Number(filterFeeMax);
+                    const matchFee = !filterFee || feeNum === Number(filterFee);
                     const isCompletedThisMonth = r.history && r.history.some(h => h.type === '방역' && h.date && h.date.startsWith(CURRENT_MONTH));
                     const matchCompletion = !filterCompletion || (filterCompletion === 'completed' ? isCompletedThisMonth : !isCompletedThisMonth);
-                    return matchSearch && matchCity && matchDistrict && matchPayStatus && matchCollection && matchRegMonth && matchIssue && matchUnchecked && matchFeeMin && matchFeeMax && matchCompletion;
+                    return matchSearch && matchCity && matchDistrict && matchPayStatus && matchCollection && matchRegMonth && matchIssue && matchUnchecked && matchFee && matchCompletion;
                 });
 
                 if (search) {
@@ -770,7 +768,7 @@
                 }
                 // 기본: 상호명 가나다 순 고정 정렬 (구글 시트 반환 순서와 무관)
                 return [...filtered].sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
-            }, [enrichedData, currentTab, search, filterCity, filterDistrict, filterPayStatus, filterCollection, filterRegMonth, filterIssueOnly, filterUncheckedOnly, filterCompletion, sortOrder, adminMode, filterFeeMin, filterFeeMax]);
+            }, [enrichedData, currentTab, search, filterCity, filterDistrict, filterPayStatus, filterCollection, filterRegMonth, filterIssueOnly, filterUncheckedOnly, filterCompletion, sortOrder, adminMode, filterFee]);
 
             const TAB_LABELS = { active: "방역거래처", prospect: "영업처", paused: "일시중지", terminated: "해지거래처" };
 
@@ -1104,17 +1102,13 @@
                                                 <option value="">등록월 전체</option>
                                                 {regMonthOptions.map(m => <option key={m} value={m}>{m} 등록</option>)}
                                             </select>
-                                            {adminMode && (
-                                                <div className="flex items-center gap-1 bg-white border rounded-xl px-2">
-                                                    <span className="text-[11px] text-gray-400 font-bold">💰</span>
-                                                    <input type="number" value={filterFeeMin} onChange={e => setFilterFeeMin(e.target.value)} placeholder="최소금액" className="text-xs p-2 w-20 outline-none font-bold" />
-                                                    <span className="text-gray-300">~</span>
-                                                    <input type="number" value={filterFeeMax} onChange={e => setFilterFeeMax(e.target.value)} placeholder="최대금액" className="text-xs p-2 w-20 outline-none font-bold" />
-                                                    {(filterFeeMin || filterFeeMax) && (
-                                                        <button onClick={() => { setFilterFeeMin(""); setFilterFeeMax(""); }} className="text-gray-400 hover:text-gray-700 text-xs px-1">✕</button>
-                                                    )}
-                                                </div>
-                                            )}
+                                            <div className="flex items-center gap-1 bg-white border rounded-xl px-2">
+                                                <span className="text-[11px] text-gray-400 font-bold">💰</span>
+                                                <input type="number" value={filterFee} onChange={e => setFilterFee(e.target.value)} placeholder="계약금액" className="text-xs p-2 w-24 outline-none font-bold" />
+                                                {filterFee && (
+                                                    <button onClick={() => setFilterFee("")} className="text-gray-400 hover:text-gray-700 text-xs px-1">✕</button>
+                                                )}
+                                            </div>
                                             <button onClick={() => adminMode ? setStaffModal(true) : alert("🔒 관리자 모드에서만 이용 가능합니다.")} className={`px-4 py-2.5 border rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm ${adminMode ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100' : 'bg-white border-gray-300 text-gray-400 cursor-not-allowed'}`}>⚙️ 대원 관리{adminMode ? '' : ' 🔒'}</button>
                                             {adminMode && (
                                             <button onClick={() => { setCurrentTab('active'); setFilterUncheckedOnly(v => !v); }}
