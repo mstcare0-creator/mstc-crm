@@ -480,9 +480,7 @@
 
                     etcInfo: fd.get("etcInfo") || "",
                     collectionStatus: fd.get("collectionStatus") || "수금완료", uncollectedAmount: fd.get("uncollectedAmount") || "0",
-                    history: regTab === "prospect" 
-                        ? [{id: Date.now(), date: salesDate, time: "", type: "상담", content: "신규 영업 활동", author: fd.get("manager") || "-"}]
-                        : [{id: Date.now(), date: TODAY, time: "", type: "상담", content: "신규 등록 완료", author: fd.get("manager") || "-"}],
+                    history: [],
                     paymentHistory: []
                 };
                 updateDataAndSync([safeData, ...data]); 
