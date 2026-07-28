@@ -166,15 +166,36 @@
             const updateDataAndSync = (newData) => {
                 const clean = dedupeAndSort(newData);
 
-                // ⚡ 저장은 즉시 진행 (화면 지연 없음)
+                // 🧩 전체 데이터를 통째로 보내는 대신, "실제로 바뀐 업체만" 골라서 서버에 보냄
+                // (여러 PC에서 동시에 서로 다른 업체를 수정해도 서로 안 덮어쓰도록)
+                const prevById = {};
+                data.forEach(item => { if (item.id) prevById[item.id] = item; });
+                const newIds = new Set();
+                const patch = [];
+                clean.forEach(item => {
+                    if (!item.id) return; // id 없는 항목은 비교/전송 대상에서 제외 (비정상 데이터 방지)
+                    newIds.add(item.id);
+                    const prev = prevById[item.id];
+                    if (!prev || stableStringify(prev) !== stableStringify(item)) {
+                        patch.push(item);
+                    }
+                });
+                const deletedIds = Object.keys(prevById).filter(id => !newIds.has(id));
+
+                // ⚡ 화면 반영은 즉시 (지연 없음)
                 setData(clean);
                 localStorage.setItem("mstc_crm_data_v50", JSON.stringify(clean));
                 lastKnownServerRef.current = dataFingerprint(clean);
                 lastSaveTimeRef.current = Date.now();
+
+                if (patch.length === 0 && deletedIds.length === 0) {
+                    return true; // 실제로 바뀐 게 없으면 서버에 보낼 필요 없음
+                }
+
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ data: clean })
+                    body: JSON.stringify({ patch, deletedIds })
                 }).catch(err => console.log("전송 지연"));
 
                 return true;
