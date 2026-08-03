@@ -138,6 +138,7 @@
             // 🛟 마지막으로 확인한 "서버 데이터" 스냅샷 — 다른 기기/탭에서 그 사이에 변경했는지 감지용
             const lastKnownServerRef = useRef(null);
             const lastSaveTimeRef = useRef(0);
+            const [saveStatus, setSaveStatus] = useState(null); // null | 'saving' | 'done' | 'error'
 
             useEffect(() => {
                 if (dataFetched) return;
@@ -192,11 +193,30 @@
                     return true; // 실제로 바뀐 게 없으면 서버에 보낼 필요 없음
                 }
 
+                setSaveStatus('saving');
+                // (Content-Type을 지정하지 않아 "단순 요청"으로 보내짐 — 이러면 프리플라이트 없이도
+                //  Apps Script가 응답을 CORS로 정상 반환해서, 진짜 성공/실패를 읽을 수 있음)
                 fetch(GOOGLE_SCRIPT_URL, {
-                    method: "POST", mode: "no-cors",
-                    headers: { "Content-Type": "application/json" },
+                    method: "POST",
                     body: JSON.stringify({ patch, deletedIds })
-                }).catch(err => console.log("전송 지연"));
+                })
+                    .then(res => res.text())
+                    .then(text => {
+                        let parsed = null;
+                        try { parsed = JSON.parse(text); } catch (e) {}
+                        if (parsed && (parsed.status === "rejected" || parsed.status === "busy" || parsed.status === "error")) {
+                            setSaveStatus('error');
+                            alert("⚠️ 저장이 서버에서 거부/실패했습니다: " + (parsed.reason || parsed.message || "알 수 없는 오류") + "\n화면을 새로고침해서 데이터를 다시 확인해주세요.");
+                        } else {
+                            setSaveStatus('done');
+                        }
+                        setTimeout(() => setSaveStatus(null), 2000);
+                    })
+                    .catch(err => {
+                        console.log("전송 지연", err);
+                        setSaveStatus('error');
+                        setTimeout(() => setSaveStatus(null), 3000);
+                    });
 
                 return true;
             };
@@ -878,6 +898,17 @@
 
             return (
                 <div>
+                    {saveStatus && (
+                        <div className={`fixed top-4 right-4 z-[999] px-4 py-2.5 rounded-xl shadow-lg text-sm font-bold flex items-center gap-2 transition-all ${
+                            saveStatus === 'saving' ? 'bg-gray-800 text-white' :
+                            saveStatus === 'done' ? 'bg-[#0B5E4D] text-white' :
+                            'bg-rose-600 text-white'
+                        }`}>
+                            {saveStatus === 'saving' && <>⏳ 저장 중...</>}
+                            {saveStatus === 'done' && <>✅ 저장 완료</>}
+                            {saveStatus === 'error' && <>⚠️ 저장 실패</>}
+                        </div>
+                    )}
                     <div className={`max-w-7xl mx-auto space-y-6 ${isCertOpen ? 'hidden print:hidden' : 'block'}`}>
                         
                         <div className="flex justify-between items-end mb-4 pt-2 px-2">
