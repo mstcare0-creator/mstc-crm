@@ -142,7 +142,7 @@
             useEffect(() => {
                 if (dataFetched) return;
                 dataFetched = true;
-                fetch(GOOGLE_SCRIPT_URL)
+                fetch(GOOGLE_SCRIPT_URL + "?t=" + Date.now(), { cache: "no-store" })
                     .then(res => res.json())
                     .then(fetchedData => {
                         if (Array.isArray(fetchedData) && fetchedData.length > 0) {
