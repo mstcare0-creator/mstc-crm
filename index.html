@@ -207,15 +207,23 @@
                         if (parsed && (parsed.status === "rejected" || parsed.status === "busy" || parsed.status === "error")) {
                             setSaveStatus('error');
                             alert("⚠️ 저장이 서버에서 거부/실패했습니다: " + (parsed.reason || parsed.message || "알 수 없는 오류") + "\n화면을 새로고침해서 데이터를 다시 확인해주세요.");
+                            setTimeout(() => setSaveStatus(null), 2000);
                         } else {
                             setSaveStatus('done');
+                            setTimeout(() => setSaveStatus(null), 2000);
                         }
-                        setTimeout(() => setSaveStatus(null), 2000);
                     })
                     .catch(err => {
-                        console.log("전송 지연", err);
-                        setSaveStatus('error');
-                        setTimeout(() => setSaveStatus(null), 3000);
+                        // 🛟 응답을 못 읽는 환경(네트워크/보안 프로그램 등)일 수 있음 — 이 경우 "실패"로 단정 짓지 않고,
+                        // 예전처럼 확실하게 전달되는 방식(no-cors)으로 자동 재전송해서 저장 자체는 보장함
+                        console.log("응답 확인 실패, no-cors로 재전송", err);
+                        fetch(GOOGLE_SCRIPT_URL, {
+                            method: "POST", mode: "no-cors",
+                            body: JSON.stringify({ patch, deletedIds })
+                        })
+                            .then(() => setSaveStatus('done-unconfirmed'))
+                            .catch(() => setSaveStatus('error'))
+                            .finally(() => setTimeout(() => setSaveStatus(null), 2500));
                     });
 
                 return true;
@@ -902,10 +910,12 @@
                         <div className={`fixed top-4 right-4 z-[999] px-4 py-2.5 rounded-xl shadow-lg text-sm font-bold flex items-center gap-2 transition-all ${
                             saveStatus === 'saving' ? 'bg-gray-800 text-white' :
                             saveStatus === 'done' ? 'bg-[#0B5E4D] text-white' :
+                            saveStatus === 'done-unconfirmed' ? 'bg-amber-600 text-white' :
                             'bg-rose-600 text-white'
                         }`}>
                             {saveStatus === 'saving' && <>⏳ 저장 중...</>}
                             {saveStatus === 'done' && <>✅ 저장 완료</>}
+                            {saveStatus === 'done-unconfirmed' && <>✅ 저장됨 (응답 확인 불가)</>}
                             {saveStatus === 'error' && <>⚠️ 저장 실패</>}
                         </div>
                     )}
